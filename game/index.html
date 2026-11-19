@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vice Solmara — un mundo abierto de crimen en 3D</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #17102b; font-family: Arial, Helvetica, sans-serif; color: #f2efe6; }
+  #game { position: fixed; inset: 0; }
+  #game canvas { display: block; }
+  #vig { position: fixed; inset: 0; pointer-events: none; z-index: 3;
+    background: radial-gradient(ellipse at center, transparent 58%, rgba(10,4,24,0.42) 100%); }
+  #dmgFlash { position: fixed; inset: 0; pointer-events: none; z-index: 4; opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 52%, rgba(220,30,30,0.5) 100%); }
+
+  .panel { background: rgba(10,13,22,0.78); border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.45); backdrop-filter: blur(3px); }
+
+  /* ---------- in-game HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; display: none; }
+  #missionPanel { position: absolute; top: 16px; left: 16px; width: 300px; padding: 10px 13px; }
+  #missionPanel .mphead { display: flex; align-items: center; gap: 8px; }
+  #mpChapter { background: #e0342b; color: #fff; font-weight: 900; font-size: 11px; padding: 2.5px 7px; border-radius: 4px; letter-spacing: 0.6px; }
+  #mpTitle { font-weight: 900; font-size: 15.5px; letter-spacing: 0.4px; }
+  #mpDist { margin-left: auto; color: #ffd23e; font-weight: 700; font-size: 12.5px; }
+  #mpLabel { margin-top: 6px; font-size: 14.5px; font-weight: 700; }
+  #mpSub { margin-top: 2px; font-size: 12px; color: #9fe870; }
+  #mpPips { margin-top: 7px; display: flex; gap: 4px; }
+  .pip { height: 4.5px; flex: 1; background: rgba(255,255,255,0.18); border-radius: 2px; }
+  .pip.done { background: #ffd23e; }
+  .pip.now { background: #fff; }
+  #mpTimerWrap { margin-top: 7px; height: 5px; background: rgba(255,255,255,0.15); border-radius: 3px; display: none; }
+  #mpTimerBar { height: 100%; width: 100%; background: #ff5147; border-radius: 3px; }
+
+  #topRight { position: absolute; top: 16px; right: 16px; text-align: right; }
+  #clockBox { display: inline-block; padding: 7px 12px; text-align: right; }
+  #clock { font-size: 11.5px; letter-spacing: 1.6px; color: #c8d2e0; font-weight: 700; }
+  #cash { font-size: 27px; font-weight: 900; color: #57d977; line-height: 1.05; text-shadow: 0 2px 8px rgba(0,0,0,0.6); }
+  #stars { font-size: 21px; letter-spacing: 3px; line-height: 1; }
+  #stars .on { color: #ffd23e; text-shadow: 0 0 9px rgba(255,210,62,0.8); }
+  #stars .off { color: rgba(255,255,255,0.25); }
+  #seenTag { margin-top: 3px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.8px; display: none; }
+  .seen-hot { color: #ff5147; } .seen-warm { color: #ffb347; } .seen-cold { color: #9fb4cc; }
+
+  #dispatchPanel { position: absolute; top: 128px; right: 16px; width: 318px; padding: 9px 12px; display: none; }
+  #dispatchPanel .dphead { display: flex; justify-content: space-between; font-size: 11.5px; font-weight: 900; letter-spacing: 0.8px; color: #ffb3ab; }
+  .dprow { display: flex; gap: 8px; align-items: flex-start; margin-top: 7px; }
+  .dpmain { flex: 1; min-width: 0; }
+  .dpcs { font-weight: 900; font-size: 12.5px; }
+  .dpdist { color: #9fb4cc; font-size: 11.5px; margin-left: 5px; }
+  .dptext { font-size: 11.8px; color: #d5dce8; line-height: 1.3; }
+  .dptac { font-size: 9.5px; font-weight: 900; letter-spacing: 0.5px; padding: 3px 6px; border-radius: 4px; color: #fff; white-space: nowrap; }
+  .tac-PURSUIT { background: #8a6d1d; } .tac-RAMMING { background: #b3541e; }
+  .tac-SPOTLIGHT { background: #2456a8; } .tac-ROADBLOCK { background: #a8232b; } .tac-FIRING { background: #7a1fa2; }
+
+  #bottomLeft { position: absolute; left: 16px; bottom: 16px; width: 188px; }
+  #minimap { width: 176px; height: 176px; display: block; margin: 0 auto; }
+  #districtName { text-align: center; font-weight: 900; letter-spacing: 2.2px; font-size: 12.5px; margin-top: 5px; color: #ffe9b0; text-shadow: 0 1px 5px #000; }
+  .barWrap { margin-top: 5px; }
+  .barLabel { display: flex; justify-content: space-between; font-size: 10px; font-weight: 800; letter-spacing: 1px; color: #cfd8e6; }
+  .bar { height: 6.5px; background: rgba(255,255,255,0.16); border-radius: 3px; overflow: hidden; margin-top: 2px; }
+  .bar > div { height: 100%; border-radius: 3px; }
+  #healthFill { background: #57d977; width: 100%; }
+  #respectFill { background: #c792ff; width: 0%; }
+
+  #bottomRight { position: absolute; right: 16px; bottom: 16px; text-align: right; }
+  #radioPanel { display: none; padding: 6px 11px; margin-bottom: 8px; text-align: left; }
+  #radioName { color: #ff4fd8; font-weight: 900; font-size: 13.5px; }
+  #radioTrack { color: #d5dce8; font-size: 11.5px; }
+  #weaponSlots { display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 8px; }
+  .wslot { width: 56px; padding: 5px 0 4px; text-align: center; background: rgba(10,13,22,0.72); border: 1.5px solid rgba(255,255,255,0.16); border-radius: 8px; position: relative; }
+  .wslot .wkey { position: absolute; top: 2px; left: 5px; font-size: 9px; color: #9fb4cc; font-weight: 800; }
+  .wslot .wico { font-size: 17px; display: block; line-height: 1.15; }
+  .wslot .wname { font-size: 8.5px; font-weight: 800; letter-spacing: 0.4px; color: #cfd8e6; }
+  .wslot.active { border-color: #ffd23e; background: rgba(50,40,8,0.8); }
+  .wslot.locked { opacity: 0.38; }
+  #speedo { display: none; padding: 8px 14px; min-width: 172px; }
+  #speedoCar { font-size: 11px; font-weight: 800; letter-spacing: 1.2px; color: #9fb4cc; text-align: right; }
+  #speedoLine { display: flex; align-items: baseline; justify-content: flex-end; gap: 5px; }
+  #speedoNum { font-size: 42px; font-weight: 900; line-height: 1; }
+  #speedoUnit { font-size: 12px; color: #9fb4cc; font-weight: 700; }
+  #speedoCondWrap { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+  #speedoCondLabel { font-size: 9px; font-weight: 800; letter-spacing: 1px; color: #9fb4cc; }
+  #speedoCondOuter { flex: 1; height: 5.5px; background: rgba(255,255,255,0.16); border-radius: 3px; overflow: hidden; }
+  #speedoCond { height: 100%; background: #57d977; }
+
+  #interactHint { position: absolute; left: 50%; bottom: 128px; transform: translateX(-50%); padding: 6px 14px;
+    font-weight: 800; font-size: 13.5px; display: none; }
+  #bustWrap { position: absolute; left: 50%; top: 108px; transform: translateX(-50%); width: 300px; padding: 8px 12px; display: none; text-align: center; }
+  #bustWrap .bustLabel { color: #ff5147; font-weight: 900; letter-spacing: 2px; font-size: 14px; }
+  #bustOuter { height: 7px; background: rgba(255,255,255,0.16); border-radius: 4px; margin-top: 5px; overflow: hidden; }
+  #bustFill { height: 100%; background: #ff5147; width: 0%; }
+
+  #dialogue { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); width: 620px; max-width: 92vw;
+    display: none; gap: 12px; padding: 12px 16px; align-items: center; pointer-events: none; }
+  #dlgPortrait { width: 62px; height: 62px; border-radius: 8px; border: 2px solid rgba(255,255,255,0.35); }
+  #dlgName { font-weight: 900; font-size: 15.5px; color: #ffd23e; display: inline; }
+  #dlgRole { font-size: 10.5px; font-weight: 800; letter-spacing: 1px; color: #9fe870; margin-left: 8px; }
+  #dlgText { font-size: 14.5px; line-height: 1.38; margin-top: 2px; }
+  #dlgHint { font-size: 10.5px; color: #9fb4cc; font-weight: 800; margin-top: 4px; letter-spacing: 1px; }
+
+  #chapterCard { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%); text-align: center;
+    opacity: 0; pointer-events: none; }
+  #chapterCard.show { animation: chapterIn 3.4s ease forwards; }
+  @keyframes chapterIn { 0% { opacity: 0; transform: translate(-50%, -46%);} 14% { opacity: 1; transform: translate(-50%, -50%);} 82% { opacity: 1; } 100% { opacity: 0; } }
+  #ccCh { display: inline-block; background: #e0342b; font-weight: 900; font-size: 15px; padding: 3px 12px; border-radius: 5px; letter-spacing: 2px; }
+  #ccTitle { display: block; font-size: 44px; font-weight: 900; letter-spacing: 3px; margin-top: 10px; text-shadow: 0 4px 26px rgba(0,0,0,0.8); }
+
+  #toasts { position: absolute; top: 84px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .toast { background: rgba(10,13,22,0.85); border: 1px solid rgba(255,210,62,0.5); color: #ffe9b0; font-weight: 800;
+    font-size: 13.5px; padding: 7px 16px; border-radius: 20px; opacity: 0; transform: translateY(-6px); transition: all 0.3s; white-space: nowrap; }
+  .toast.in { opacity: 1; transform: translateY(0); }
+
+  /* ---------- full screens ---------- */
+  .screen { position: fixed; inset: 0; z-index: 8; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  #pauseScreen, #bustedScreen, #wastedScreen { background: rgba(8,5,18,0.66); }
+  .bigWord { font-size: 74px; font-weight: 900; letter-spacing: 6px; text-shadow: 0 6px 34px rgba(0,0,0,0.85); }
+  .screenSub { margin-top: 10px; font-size: 16px; color: #d5dce8; }
+  .menuBtn { pointer-events: auto; cursor: pointer; margin-top: 14px; background: linear-gradient(180deg, #ffb347, #ff7e47);
+    color: #241105; border: none; font-weight: 900; font-size: 16.5px; letter-spacing: 1.2px; padding: 12px 34px; border-radius: 9px;
+    box-shadow: 0 8px 26px rgba(255,126,71,0.4); }
+  .menuBtn:hover { filter: brightness(1.1); }
+  .menuBtn.ghost { background: rgba(255,255,255,0.1); color: #f2efe6; border: 1px solid rgba(255,255,255,0.35); box-shadow: none; }
+  .controlsGrid { margin-top: 22px; display: grid; grid-template-columns: auto auto; gap: 4px 16px; font-size: 13px; color: #c8d2e0; text-align: left; }
+  .controlsGrid b { color: #ffd23e; text-align: right; }
+
+  /* ---------- title screen / poster ---------- */
+  #titleScreen { justify-content: flex-start; padding-top: 5.5vh; background: linear-gradient(180deg, rgba(16,6,34,0.24) 0%, transparent 34%, transparent 62%, rgba(10,4,22,0.55) 100%); }
+  #titleTop { font-size: 12.5px; font-weight: 800; letter-spacing: 4.5px; color: #ffd9a0; text-shadow: 0 2px 10px rgba(0,0,0,0.7); }
+  .poster { margin-top: 10px; line-height: 0.94; position: relative; }
+  .posterLine { display: block; font-family: 'Arial Black', Arial, sans-serif; font-weight: 900; font-size: 108px; letter-spacing: 3px;
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='340' height='130'%3E%3Cg fill='%23150726' fill-opacity='0.6'%3E%3Cpath d='M52 130 Q58 66 40 30 Q74 62 64 130Z'/%3E%3Cpath d='M42 34 Q16 14 -8 24 Q22 48 42 42Z'/%3E%3Cpath d='M44 32 Q70 8 100 16 Q66 44 46 40Z'/%3E%3Cpath d='M268 130 Q274 60 254 20 Q292 58 282 130Z'/%3E%3Cpath d='M256 24 Q228 2 204 12 Q234 38 256 32Z'/%3E%3Cpath d='M258 22 Q286 -2 314 6 Q282 34 260 30Z'/%3E%3C/g%3E%3C/svg%3E"),
+      linear-gradient(180deg, #ffe259 0%, #ff7ac0 36%, #b04fe0 63%, #3f6ae0 100%);
+    background-size: 340px 130px, 100% 100%;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 5px 0 rgba(24,6,44,0.6)) drop-shadow(0 12px 26px rgba(0,0,0,0.5)); }
+  #badge3d { position: absolute; right: -64px; bottom: 16px; font-family: 'Arial Black', Arial, sans-serif; font-size: 44px; font-weight: 900;
+    color: #22d8ff; text-shadow: 0 0 16px rgba(34,216,255,0.95), 0 0 42px rgba(34,216,255,0.55); transform: rotate(-4deg); }
+  #tagline { margin-top: 14px; font-size: 19.5px; font-weight: 700; color: #fff; text-shadow: 0 2px 12px rgba(0,0,0,0.85); }
+  #titleBtns { display: flex; gap: 12px; margin-top: 20px; }
+  #saveNote { margin-top: 10px; font-size: 12px; color: #c8d2e0; letter-spacing: 0.6px; }
+  #featureStrip { position: absolute; bottom: 0; left: 0; right: 0; padding: 13px 10px; font-size: 12.5px; font-weight: 800;
+    letter-spacing: 2.6px; color: #ffe9b0; background: linear-gradient(0deg, rgba(8,4,18,0.78), transparent); }
+  #featureStrip .dot { color: #ff4fd8; margin: 0 10px; }
+
+  body.cover-mode #titleBtns, body.cover-mode #saveNote, body.cover-mode .controlsGrid { display: none !important; }
+  #mapOverlay { position: fixed; inset: 0; z-index: 7; display: none; background: rgba(6,9,16,0.9); }
+  #fullMap { display: block; margin: 3.2vh auto; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="game"></div>
+<div id="vig"></div>
+<div id="dmgFlash"></div>
+
+<div id="hud">
+  <div id="missionPanel" class="panel">
+    <div class="mphead"><span id="mpChapter">CH 1</span><span id="mpTitle">PRIMER ENCARGO</span><span id="mpDist"></span></div>
+    <div id="mpLabel">Ve al marcador</div>
+    <div id="mpSub"></div>
+    <div id="mpPips"></div>
+    <div id="mpTimerWrap"><div id="mpTimerBar"></div></div>
+  </div>
+
+  <div id="topRight">
+    <div id="clockBox" class="panel">
+      <div id="clock">DÍA 1 · 18:00</div>
+      <div id="cash">$0</div>
+      <div id="stars"></div>
+      <div id="seenTag">● A LA VISTA</div>
+    </div>
+  </div>
+
+  <div id="dispatchPanel" class="panel">
+    <div class="dphead"><span>🚨 PATRULLA · RESPUESTA</span><span id="dpCount">0 UNIDADES</span></div>
+    <div id="dpRows"></div>
+  </div>
+
+  <div id="bottomLeft">
+    <canvas id="minimap" width="176" height="176"></canvas>
+    <div id="districtName">CENTRO</div>
+    <div class="barWrap">
+      <div class="barLabel"><span>SALUD</span><span></span></div>
+      <div class="bar"><div id="healthFill"></div></div>
+    </div>
+    <div class="barWrap">
+      <div class="barLabel"><span>RESPETO</span><span id="respectRank">DON NADIE</span></div>
+      <div class="bar"><div id="respectFill"></div></div>
+    </div>
+  </div>
+
+  <div id="bottomRight">
+    <div id="radioPanel" class="panel">
+      <div id="radioName">♪ OLA 98.1</div>
+      <div id="radioTrack">Neon Reprise — Vela Roja</div>
+    </div>
+    <div id="weaponSlots">
+      <div class="wslot" data-w="fists"><span class="wkey">1</span><span class="wico">✊</span><span class="wname">PUÑOS</span></div>
+      <div class="wslot" data-w="pistol"><span class="wkey">2</span><span class="wico">🔫</span><span class="wname">PISTOLA</span></div>
+      <div class="wslot" data-w="smg"><span class="wkey">3</span><span class="wico">💥</span><span class="wname">SMG</span></div>
+    </div>
+    <div id="speedo" class="panel">
+      <div id="speedoCar">ÁGUILA GT</div>
+      <div id="speedoLine"><span id="speedoNum">0</span><span id="speedoUnit">KM/H</span></div>
+      <div id="speedoCondWrap"><span id="speedoCondLabel">ESTADO</span><div id="speedoCondOuter"><div id="speedoCond"></div></div></div>
+    </div>
+  </div>
+
+  <div id="interactHint" class="panel">E · Subir al coche</div>
+
+  <div id="bustWrap" class="panel">
+    <div class="bustLabel">¡DETENIDO!</div>
+    <div id="bustOuter"><div id="bustFill"></div></div>
+  </div>
+
+  <div id="dialogue" class="panel">
+    <img id="dlgPortrait" alt="">
+    <div>
+      <span id="dlgName">Marina Vidal</span><span id="dlgRole">LA JEFA · FIXER</span>
+      <div id="dlgText"></div>
+      <div id="dlgHint">E ▸ SEGUIR</div>
+    </div>
+  </div>
+
+  <div id="chapterCard"><span id="ccCh">CH 1</span><span id="ccTitle">PRIMER ENCARGO</span></div>
+  <div id="toasts"></div>
+</div>
+
+<div id="titleScreen" class="screen">
+  <div id="titleTop">UNA CIUDAD ORIGINAL · ISLA DEL PONIENTE</div>
+  <div class="poster">
+    <span class="posterLine">VICE</span>
+    <span class="posterLine">SOLMARA</span>
+    <span id="badge3d">3D</span>
+  </div>
+  <div id="tagline">One island. Eight jobs. Nowhere to hide.</div>
+  <div id="titleBtns">
+    <button id="btnContinue" class="menuBtn">CONTINUAR</button>
+    <button id="btnNew" class="menuBtn ghost">NUEVA PARTIDA</button>
+  </div>
+  <div id="saveNote"></div>
+  <div class="controlsGrid">
+    <b>W A S D</b><span>Conducir / andar</span>
+    <b>MOUSE</b><span>Cámara · clic para disparar</span>
+    <b>E</b><span>Entrar al coche · hablar</span>
+    <b>1 2 3</b><span>Puños · pistola · SMG</span>
+    <b>M</b><span>Mapa</span>
+    <b>R</b><span>Radio</span>
+    <b>SHIFT / SPACE</b><span>Correr / freno de mano</span>
+  </div>
+  <div id="featureStrip">8 STORY MISSIONS<span class="dot">•</span>5-STAR SMPD PURSUIT<span class="dot">•</span>HELICOPTER CHASES<span class="dot">•</span>EXPLOSIONS<span class="dot">•</span>A CITY WITH NO STRAIGHT LINES</div>
+</div>
+
+<div id="pauseScreen" class="screen">
+  <div class="bigWord">PAUSA</div>
+  <div class="screenSub">Vice Solmara te espera. La policía, también.</div>
+  <button id="btnResume" class="menuBtn">SEGUIR</button>
+  <button id="btnToTitle" class="menuBtn ghost">TÍTULO</button>
+</div>
+
+<div id="bustedScreen" class="screen">
+  <div class="bigWord" style="color:#7db4ff">DETENIDO</div>
+  <div class="screenSub" id="bustedSub">La SMPD te lleva a la Comisaría Central. Multa pagada, estrellas limpias.</div>
+</div>
+
+<div id="wastedScreen" class="screen">
+  <div class="bigWord" style="color:#ff5147">ELIMINADO</div>
+  <div class="screenSub" id="wastedSub">Despiertas en el hospital. La factura duele más que las balas.</div>
+</div>
+
+<div id="mapOverlay"><canvas id="fullMap" width="920" height="620"></canvas></div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
