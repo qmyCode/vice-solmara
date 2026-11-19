@@ -1,3 +1,9 @@
+[![make.fun bounty](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01)
+[![rank](https://make.fun/badge/gta6-01/qmyCode/vice-solmara/rank.svg)](https://make.fun/bounty/gta6-01)
+[![reward](https://make.fun/badge/gta6-01/qmyCode/vice-solmara/reward.svg)](https://make.fun/bounty/gta6-01)
+
+Built for make.fun's [Make GTA 6 bounty](https://make.fun/bounty/gta6-01).
+
 # VICE SOLMARA
 
 An original 3D open-world crime game that runs in a desktop browser from static files — no
