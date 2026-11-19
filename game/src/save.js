@@ -1,38 +1,37 @@
-// save.js — one job: remember the run between visits. Cash, respect, story progress and
-// owned weapons persist in localStorage; a fresh profile starts broke with bare fists and a
-// borrowed pistol from the fixer's first job.
+// save.js — one job: persist Rico's progress in localStorage.
+// Cash, respect, story progress, unlocked weapons and lifetime stats survive
+// a reload; a fresh profile starts with $120 and a name nobody knows.
 
-const KEY = 'viceSolmaraSaveV1';
+const KEY = 'vice-solmara-save-v1';
 
-export const FRESH_SAVE = {
-  cash: 120,
-  respect: 0,
-  missionIdx: 0,
-  weapons: ['fists', 'pistol'],
-  storyDone: false,
+export const DEFAULT_SAVE = {
+  cash: 120, respect: 8, missionIndex: 0, day: 1,
+  weapons: [true, true, false], // fists, pistol, SMG (SMG is earned in CH 4)
+  stats: { carsStolen: 0, explosions: 0, busts: 0, missionsDone: 0, distanceKm: 0 },
 };
 
 export function loadSave() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...FRESH_SAVE };
-    const parsed = JSON.parse(raw);
-    return { ...FRESH_SAVE, ...parsed, weapons: Array.isArray(parsed.weapons) ? parsed.weapons : [...FRESH_SAVE.weapons] };
-  } catch {
-    return { ...FRESH_SAVE };
-  }
+    if (!raw) return structuredClone(DEFAULT_SAVE);
+    const s = JSON.parse(raw);
+    return { ...structuredClone(DEFAULT_SAVE), ...s, stats: { ...DEFAULT_SAVE.stats, ...(s.stats || {}) } };
+  } catch { return structuredClone(DEFAULT_SAVE); }
 }
 
-export function storeSave(state) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(state));
-  } catch {
-    /* private mode: the run simply does not persist */
-  }
+export function storeSave(s) {
+  try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* private mode */ }
 }
 
 export function wipeSave() {
-  try {
-    localStorage.removeItem(KEY);
-  } catch { /* nothing to wipe */ }
+  try { localStorage.removeItem(KEY); } catch { /* noop */ }
+}
+
+export function respectRank(respect) {
+  if (respect >= 85) return 'DON DE SOLMARA';
+  if (respect >= 65) return 'CAPO COSTERO';
+  if (respect >= 45) return 'HOMBRE DE MARINA';
+  if (respect >= 28) return 'RUEDAS CONOCIDAS';
+  if (respect >= 15) return 'CHICO DE LOS RECADOS';
+  return 'DON NADIE';
 }

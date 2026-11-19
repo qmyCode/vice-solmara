@@ -1,95 +1,103 @@
-// traffic.js — one job: the city's civilian cars. A routed fleet drives the junction graph
-// forever (new destination whenever one is reached, slowing for the car ahead), and a parked
-// fleet lines the roadsides waiting to be stolen. Everything moves through vehicles.js physics.
+// traffic.js — one job: the living traffic of Solmara.
+// Routed AI cars follow GPS paths over the road graph, slow for the car
+// ahead, and re-route at their destination. Parked cars line the kerbs.
+// Any car can be stolen; a stolen moving car costs its driver a scare.
 
-import { Rng, clamp, angDiff, dist2d } from './rng.js';
+import * as THREE from 'three';
+import { NODES, findRoute, nearestRoadPoint, heightAt } from './city.js';
+import { Car, CAR_TYPES } from './vehicles.js';
+import { liveRng as rng, clamp } from './rng.js';
 
-export function createTraffic(G) {
-  const { city, vehicles } = G;
-  const rng = new Rng(city.seed * 31 + 5);
-  const moving = [];
-  const parkedCars = [];
-  const TYPES = ['sedan', 'sedan', 'taxi', 'hatch', 'pickup', 'van'];
+const FLOW_TYPES = ['sedan', 'sedan', 'taxi', 'hatch', 'pickup', 'van', 'sports'];
+export const allCars = []; // every Car in the world (traffic, parked, police, mission)
 
-  function newRoute(car) {
-    const target = city.nodes[rng.int(0, city.nodes.length - 1)];
-    car.route = city.route(car.x, car.z, target.x, target.z);
-    car.routeI = 1;
+export class Traffic {
+  constructor(scene, colliders) {
+    this.scene = scene;
+    this.colliders = colliders;
+    this.cars = [];
+    for (let i = 0; i < 14; i++) this.spawnFlow(true);
+    for (let i = 0; i < 46; i++) this.spawnParked();
   }
-
-  function spawnMoving() {
-    const node = city.nodes[rng.int(0, city.nodes.length - 1)];
-    const type = rng.pick(TYPES);
-    const car = vehicles.spawn(type, node.x, node.z, rng.range(0, Math.PI * 2), { driver: 'traffic', rng });
-    car.cruise = rng.range(10.5, 15);
-    newRoute(car);
-    moving.push(car);
+  randomNodeFar(x, z, minD = 120) {
+    for (let k = 0; k < 12; k++) {
+      const n = NODES[(Math.random() * NODES.length) | 0];
+      if (Math.hypot(n.x - x, n.z - z) > minD) return n;
+    }
+    return NODES[(Math.random() * NODES.length) | 0];
+  }
+  spawnFlow(anywhere = false) {
+    const n = anywhere ? NODES[(Math.random() * NODES.length) | 0] : this.randomNodeFar(0, 0, 40);
+    const type = rng.pick(FLOW_TYPES);
+    const car = new Car(this.scene, type, rng.pick(CAR_TYPES[type].colors), n.x, n.z, rng.range(0, Math.PI * 2));
+    car.driver = 'traffic';
+    car.cruise = rng.range(9, 15);
+    this.retarget(car);
+    this.cars.push(car); allCars.push(car);
     return car;
   }
-
-  function spawnParked() {
-    for (let tries = 0; tries < 40 && parkedCars.length < 52; tries++) {
-      const road = city.roads[rng.int(0, city.roads.length - 1)];
-      const i = rng.int(2, road.pts.length - 3);
-      const p = road.pts[i], q = road.pts[i + 1];
-      const dx = q.x - p.x, dz = q.z - p.z, len = Math.hypot(dx, dz) || 1;
-      const side = rng.chance(0.5) ? 1 : -1;
-      const x = p.x + (-dz / len) * side * (road.width / 2 + 1.6);
-      const z = p.z + (dx / len) * side * (road.width / 2 + 1.6);
-      if (city.inWater(x, z)) continue;
-      let clash = false;
-      for (const c of parkedCars) if (dist2d(x, z, c.x, c.z) < 7) { clash = true; break; }
-      if (clash) continue;
-      const heading = Math.atan2(dz, dx) + (side < 0 ? Math.PI : 0);
-      const type = rng.pick([...TYPES, 'gt']);
-      const car = vehicles.spawn(type, x, z, heading, { driver: null, parked: true, rng });
-      parkedCars.push(car);
+  spawnParked() {
+    const n = NODES[(Math.random() * NODES.length) | 0];
+    const type = rng.pick(FLOW_TYPES);
+    const side = rng.sign();
+    const car = new Car(this.scene, type, rng.pick(CAR_TYPES[type].colors),
+      n.x + side * 4.6, n.z + rng.range(-3, 3), rng.range(0, Math.PI * 2));
+    car.driver = null;
+    // Align roughly with the road direction using the nearest route point pair.
+    this.cars.push(car); allCars.push(car);
+    return car;
+  }
+  retarget(car) {
+    const dest = this.randomNodeFar(car.x, car.z, 150);
+    car.route = findRoute(car.x, car.z, dest.x, dest.z);
+    car.routeI = 0;
+  }
+  // Follow the route: pure-pursuit steering toward the next points.
+  steer(car, dt) {
+    if (!car.route || car.routeI >= car.route.length) { this.retarget(car); return { throttle: 0.4, steer: 0 }; }
+    let target = car.route[car.routeI];
+    let d = Math.hypot(target.x - car.x, target.z - car.z);
+    while (d < 9 && car.routeI < car.route.length - 1) { car.routeI++; target = car.route[car.routeI]; d = Math.hypot(target.x - car.x, target.z - car.z); }
+    if (car.routeI >= car.route.length - 1 && d < 10) this.retarget(car);
+    const look = { x: target.x, z: target.z };
+    const want = Math.atan2(-(look.x - car.x), -(look.z - car.z));
+    let diff = want - car.angle;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    const steer = clamp(diff * 1.6, -1, 1);
+    let throttle = 0.75;
+    // Slow for the car ahead.
+    const f = car.forward();
+    for (const o of allCars) {
+      if (o === car) continue;
+      const dx = o.x - car.x, dz = o.z - car.z;
+      const ahead = dx * f.x + dz * f.z, side = Math.abs(dx * -f.z + dz * f.x);
+      if (ahead > 0 && ahead < 9 && side < 2.2) { throttle = o.speed > car.speed ? 0.1 : -0.4; break; }
+    }
+    if (Math.abs(diff) > 1.1) throttle = Math.min(throttle, 0.25);
+    car.speedTarget = car.cruise || 12;
+    if (car.speed > car.speedTarget) throttle = Math.min(throttle, 0);
+    return { throttle, steer };
+  }
+  update(dt) {
+    for (const car of this.cars) {
+      if (car.driver === 'traffic') {
+        const s = this.steer(car, dt);
+        car.drive(dt, s.throttle, s.steer, this.colliders, allCars);
+      } else if (car.driver === null || car.driver === 'mission') {
+        car.drive(dt, 0, 0, this.colliders, allCars);
+      }
+      if (car.burning > 0) car.burning -= dt;
+    }
+    // Keep density near the action: recycle far-away flow cars.
+  }
+  recycleNear(x, z) {
+    for (const car of this.cars) {
+      if (car.driver === 'traffic' && Math.hypot(car.x - x, car.z - z) > 620) {
+        const n = this.randomNodeFar(x, z, 200);
+        car.x = n.x; car.z = n.z; car.dead = false; car.health = 100; car.burning = 0;
+        this.retarget(car);
+      }
     }
   }
-
-  for (let i = 0; i < 11; i++) spawnMoving();
-  spawnParked();
-
-  /** Steer one traffic car along its route for this step. */
-  function driveCar(car, dt) {
-    if (car.dead || car.driver !== 'traffic') return;
-    if (!car.route || car.routeI >= car.route.length) { newRoute(car); return; }
-    const wp = car.route[car.routeI];
-    if (dist2d(car.x, car.z, wp.x, wp.z) < 8) { car.routeI++; return; }
-    const desired = Math.atan2(wp.z - car.z, wp.x - car.x);
-    const steer = clamp(angDiff(car.heading, desired) * 1.7, -1, 1);
-    // slow down for whatever is ahead
-    let throttle = 0.8;
-    const fx = Math.cos(car.heading), fz = Math.sin(car.heading);
-    for (const other of vehicles.cars) {
-      if (other === car) continue;
-      const rx = other.x - car.x, rz = other.z - car.z;
-      const ahead = rx * fx + rz * fz;
-      const side = -rx * fz + rz * fx;
-      if (ahead > 0 && ahead < 10 && Math.abs(side) < 2.4) { throttle = ahead < 5.5 ? -0.2 : 0.25; break; }
-    }
-    const targetSpeed = car.cruise * (Math.abs(steer) > 0.5 ? 0.55 : 1);
-    if (car.speed > targetSpeed) throttle = Math.min(throttle, 0);
-    vehicles.stepCar(car, dt, { throttle, steer }, G.onVehicleEvent);
-    if (Math.abs(car.speed) < 0.4 && throttle > 0) {
-      car.stuckT += dt;
-      if (car.stuckT > 4) { car.stuckT = 0; newRoute(car); }
-    } else car.stuckT = 0;
-  }
-
-  return {
-    moving, parkedCars,
-    step(dt) {
-      for (const car of moving) driveCar(car, dt);
-    },
-    /** A parked car the player just took: it leaves the parked fleet. */
-    claimParked(car) {
-      const i = parkedCars.indexOf(car);
-      if (i >= 0) parkedCars.splice(i, 1);
-    },
-    /** A car the player abandoned joins the parked fleet again. */
-    releaseParked(car) {
-      if (!parkedCars.includes(car)) parkedCars.push(car);
-    },
-  };
 }
