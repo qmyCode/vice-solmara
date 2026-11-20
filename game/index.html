@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Solmara Nights — Vice Solmara</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0e18; font-family: Arial, Helvetica, sans-serif; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .hidden { display: none !important; }
+  #hud { position: fixed; inset: 0; pointer-events: none; color: #fff; }
+  #mission { position: absolute; top: 14px; left: 14px; max-width: 330px; background: rgba(8,10,20,0.55); border-left: 3px solid #ffc93c; padding: 8px 12px; border-radius: 4px; }
+  #m-ch { font-size: 10px; letter-spacing: 2px; color: #ffc93c; font-weight: bold; }
+  #m-title { font-size: 16px; font-weight: 900; letter-spacing: 0.5px; }
+  #m-obj { font-size: 12.5px; color: #e8e4da; margin-top: 2px; }
+  #m-timer { font-size: 15px; font-weight: 900; color: #ffd94a; margin-top: 2px; }
+  #m-timer.low { color: #ff5348; }
+  #stats { position: absolute; top: 14px; right: 16px; text-align: right; }
+  #cash { font-size: 24px; font-weight: 900; color: #7ddb6a; text-shadow: 0 2px 6px rgba(0,0,0,0.7); }
+  #respect { font-size: 12px; color: #d9c8ff; letter-spacing: 1px; }
+  #stars { font-size: 21px; letter-spacing: 3px; margin-top: 2px; }
+  #stars .on { color: #ffd94a; text-shadow: 0 0 8px rgba(255,200,40,0.8); }
+  #stars .off { color: rgba(255,255,255,0.22); }
+  #healthwrap { width: 170px; height: 9px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.35); margin: 6px 0 0 auto; border-radius: 3px; }
+  #health { height: 100%; width: 100%; background: linear-gradient(90deg, #e83e3e, #f2b21b); border-radius: 3px; }
+  #minimap { position: absolute; left: 14px; bottom: 14px; width: 176px; height: 176px; }
+  #dispatch { position: absolute; left: 14px; bottom: 202px; width: 330px; font-size: 11.5px; }
+  #dispatch div { background: rgba(10,16,30,0.62); border-left: 3px solid #3f8cff; color: #cfe4ff; padding: 4px 8px; margin-top: 4px; border-radius: 3px; }
+  #speedo { position: absolute; right: 18px; bottom: 86px; text-align: right; }
+  #speedo b { font-size: 34px; font-weight: 900; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
+  #speedo small { font-size: 12px; color: #ddd; }
+  #wslots { position: absolute; right: 16px; bottom: 16px; display: flex; gap: 6px; }
+  .wslot { width: 74px; padding: 6px 0 5px; text-align: center; background: rgba(8,10,20,0.55); border: 1px solid rgba(255,255,255,0.25); border-radius: 4px; font-size: 11px; color: #bbb; }
+  .wslot b { display: block; font-size: 12.5px; color: #eee; }
+  .wslot.sel { border-color: #ffc93c; color: #ffc93c; box-shadow: 0 0 10px rgba(255,201,60,0.35); }
+  .wslot.locked { opacity: 0.38; }
+  #bustwrap { position: absolute; left: 50%; bottom: 148px; transform: translateX(-50%); width: 300px; text-align: center; }
+  #bustlabel { font-weight: 900; letter-spacing: 3px; color: #ff5348; font-size: 15px; text-shadow: 0 2px 6px #000; }
+  #bustbar { height: 10px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.4); border-radius: 4px; margin-top: 4px; }
+  #bustfill { height: 100%; width: 0%; background: #ff5348; border-radius: 4px; }
+  #dialogue { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); width: min(680px, 92vw); display: flex; gap: 12px; background: rgba(8,9,18,0.88); border: 1px solid rgba(255,201,60,0.5); border-radius: 8px; padding: 12px 14px; pointer-events: none; }
+  #portrait { width: 96px; height: 96px; border-radius: 6px; flex: none; }
+  #d-name { color: #ffc93c; font-weight: 900; font-size: 14px; letter-spacing: 1px; }
+  #d-text { font-size: 15.5px; line-height: 1.45; color: #f2eee4; margin-top: 3px; }
+  #d-next { color: #9fd4ff; font-size: 11.5px; margin-top: 6px; letter-spacing: 1px; }
+  #toast { position: absolute; left: 50%; top: 84px; transform: translateX(-50%); font-size: 17px; font-weight: 900; color: #ffe9b0; text-shadow: 0 2px 8px #000; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
+  #chapter { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(5,6,12,0.45); }
+  #ch-num { font-size: 15px; letter-spacing: 6px; color: #ffc93c; font-weight: bold; }
+  #ch-title { font-size: 52px; font-weight: 900; letter-spacing: 3px; color: #fff; text-shadow: 0 4px 24px rgba(255,80,180,0.55); margin-top: 6px; text-align: center; }
+  #banner { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 74px; font-weight: 900; letter-spacing: 10px; color: #ff4038; text-shadow: 0 6px 34px rgba(0,0,0,0.9); background: rgba(10,0,0,0.35); }
+  #banner.info { color: #ffd94a; font-size: 44px; letter-spacing: 5px; }
+  #flashred { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(220,30,30,0.5)); opacity: 0; }
+  #crosshair { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: rgba(255,255,255,0.9); box-shadow: 0 0 6px rgba(0,0,0,0.9); }
+  .screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; text-align: center; }
+  #title { background: linear-gradient(180deg, rgba(10,8,26,0.25), rgba(10,8,26,0.72)); }
+  .game-logo { font-weight: 900; line-height: 0.92; letter-spacing: 1px; }
+  .game-logo .a { display: block; font-size: 84px; background: linear-gradient(180deg, #ffe95a, #ff8c1a 60%, #ff2e88); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 4px 18px rgba(255,80,60,0.45)); }
+  .game-logo .b { display: block; font-size: 84px; background: linear-gradient(180deg, #7df9ff, #2288ff 55%, #b04dff); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 4px 18px rgba(60,120,255,0.45)); }
+  .tagline { margin-top: 14px; font-size: 16px; letter-spacing: 3px; color: #ffe9b0; }
+  .controls { margin-top: 30px; font-size: 13.5px; line-height: 1.85; color: #d8d4c8; background: rgba(8,10,20,0.6); padding: 12px 26px; border-radius: 8px; }
+  .controls b { color: #ffc93c; }
+  .prompt { margin-top: 26px; font-size: 18px; font-weight: 900; letter-spacing: 2px; color: #fff; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 50% { opacity: 0.35; } }
+  #pause { background: rgba(5,6,12,0.6); font-size: 40px; font-weight: 900; letter-spacing: 6px; }
+  #pause small { font-size: 14px; letter-spacing: 1px; color: #ccc; margin-top: 10px; }
+  #mapwrap { position: fixed; inset: 0; background: rgba(4,10,16,0.82); display: flex; align-items: center; justify-content: center; }
+  #mapcanvas { max-width: 96vw; max-height: 94vh; border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; }
+  #endcard { background: rgba(8,6,18,0.78); }
+  #endcard .big { font-size: 46px; font-weight: 900; letter-spacing: 3px; color: #ffd94a; }
+  #endcard .sub { margin-top: 12px; font-size: 16px; color: #eee; line-height: 1.6; }
+  #cover { position: fixed; inset: 0; pointer-events: none; }
+  #cover .ct { position: absolute; left: 44px; bottom: 120px; font-weight: 900; line-height: 0.9; }
+  #cover .ct .a { display: block; font-size: 92px; background: linear-gradient(180deg, #ffe95a, #ff8c1a 62%, #ff2e88); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 5px 22px rgba(255,80,60,0.5)); }
+  #cover .ct .b { display: block; font-size: 92px; background: linear-gradient(180deg, #7df9ff, #2288ff 55%, #b04dff); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 5px 22px rgba(60,120,255,0.5)); }
+  #cover .tag { position: absolute; left: 48px; bottom: 88px; font-size: 19px; letter-spacing: 2.5px; color: #fff; text-shadow: 0 2px 10px #000; font-style: italic; }
+  #cover .strip { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(8,6,18,0.82); color: #ffc93c; font-size: 14.5px; font-weight: bold; letter-spacing: 2.5px; text-align: center; padding: 10px 0; }
+  #cover .badge { position: absolute; right: 40px; top: 34px; font-size: 30px; font-weight: 900; color: #ff2fd6; border: 3px solid #ff2fd6; border-radius: 10px; padding: 2px 12px; transform: rotate(8deg); text-shadow: 0 0 14px rgba(255,47,214,0.8); box-shadow: 0 0 18px rgba(255,47,214,0.5); }
+  #cover svg { position: absolute; left: 30px; bottom: 96px; opacity: 0.85; }
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="Solmara Nights: a 3D open-world crime game set on the island of Solmara"></canvas>
+<div id="hud" class="hidden">
+  <div id="mission"><div id="m-ch"></div><div id="m-title"></div><div id="m-obj"></div><div id="m-timer" class="hidden"></div></div>
+  <div id="stats">
+    <div id="cash">$0</div>
+    <div id="respect">RESPECT 0</div>
+    <div id="stars"></div>
+    <div id="healthwrap"><div id="health"></div></div>
+  </div>
+  <canvas id="minimap" width="176" height="176"></canvas>
+  <div id="dispatch"></div>
+  <div id="bustwrap" class="hidden"><div id="bustlabel">BUSTED</div><div id="bustbar"><div id="bustfill"></div></div></div>
+  <div id="speedo" class="hidden"><b id="speed">0</b> <small>km/h</small></div>
+  <div id="wslots"></div>
+  <div id="crosshair"></div>
+  <div id="dialogue" class="hidden"><canvas id="portrait" width="96" height="96"></canvas><div><div id="d-name"></div><div id="d-text"></div><div id="d-next">E / CLICK ▸</div></div></div>
+  <div id="toast"></div>
+  <div id="chapter" class="hidden"><div id="ch-num"></div><div id="ch-title"></div></div>
+  <div id="banner" class="hidden"></div>
+  <div id="flashred"></div>
+</div>
+<div id="mapwrap" class="hidden"><canvas id="mapcanvas" width="980" height="760"></canvas></div>
+<div id="cover" class="hidden">
+  <svg width="300" height="120" viewBox="0 0 300 120"><g fill="#160a24"><path d="M40 118 L46 60 Q30 40 8 44 Q30 52 40 66 Q26 62 12 74 Q32 74 42 84 L44 118 Z"/><path d="M46 60 Q52 34 78 26 Q58 44 52 62 Q66 48 88 48 Q66 58 54 74 L50 118 L44 118 Z"/><path d="M250 118 L254 66 Q240 48 218 50 Q240 58 248 72 Q234 68 222 80 Q240 80 250 90 L252 118 Z"/><path d="M256 66 Q264 42 288 36 Q270 52 262 68 Q276 56 296 58 Q276 66 264 80 L260 118 L254 118 Z"/></g></svg>
+  <div class="ct"><span class="a">SOLMARA</span><span class="b">NIGHTS</span></div>
+  <div class="tag">One island. Eight jobs. Nowhere to hide.</div>
+  <div class="badge">3D</div>
+  <div class="strip">3D OPEN WORLD &nbsp;·&nbsp; 8 STORY JOBS &nbsp;·&nbsp; 5-STAR HEAT &nbsp;·&nbsp; HELICOPTER PURSUIT &nbsp;·&nbsp; CHAIN EXPLOSIONS</div>
+</div>
+<div id="title" class="screen">
+  <div class="game-logo"><span class="a">SOLMARA</span><span class="b">NIGHTS</span></div>
+  <div class="tagline">ONE ISLAND · EIGHT JOBS · NOWHERE TO HIDE</div>
+  <div class="controls">
+    <b>WASD</b> move / drive &nbsp;·&nbsp; <b>Shift</b> run &nbsp;·&nbsp; <b>F / E</b> enter car · talk · take job<br>
+    <b>Mouse</b> look &nbsp;·&nbsp; <b>Click</b> shoot &nbsp;·&nbsp; <b>1/2/3</b> weapons &nbsp;·&nbsp; <b>Space</b> brake<br>
+    <b>M</b> map &nbsp;·&nbsp; <b>R</b> radio &nbsp;·&nbsp; <b>P / Esc</b> pause
+  </div>
+  <div class="prompt">CLICK OR PRESS ENTER TO START</div>
+</div>
+<div id="pause" class="screen hidden">PAUSED<small>WASD drive · M map · R radio — press P or Esc to resume</small></div>
+<div id="endcard" class="screen hidden">
+  <div class="big">SOLMARA NIGHTS — COMPLETE</div>
+  <div class="sub" id="endstats"></div>
+  <div class="sub">The island stays open: free roam, outrun the law, grow the legend.</div>
+</div>
+<p id="status" role="status" aria-live="polite"></p>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
