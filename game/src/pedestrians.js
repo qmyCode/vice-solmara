@@ -119,7 +119,7 @@ export function createPeds(G, rng) {
   }
   // the crowd around the player's usual haunts
   const anchors = [city.places.garage, city.places.hotel, city.places.club, city.places.station, city.districts[1], city.districts[0], city.districts[5]];
-  for (let i = 0; i < 24; i++) {
+  for (let i = 0; i < 32; i++) {
     const a = anchors[i % anchors.length];
     const x = a.x + rng.range(-46, 46), z = a.z + rng.range(-46, 46);
     if (city.height(x, z) > 0.3) spawn(x, z);

@@ -39,7 +39,10 @@ function facadeTexture(floors, cols) {
 function neonTexture(text, color) {
   const tex = canvasTexture(512, 128, (g, w, h) => {
     g.clearRect(0, 0, w, h);
-    g.font = 'bold 64px Arial, sans-serif';
+    // shrink the font until long names fit the canvas instead of clipping at the edges
+    let fs = 64;
+    g.font = `bold ${fs}px Arial, sans-serif`;
+    while (g.measureText(text).width > w - 20 && fs > 18) { fs -= 4; g.font = `bold ${fs}px Arial, sans-serif`; }
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.shadowColor = color; g.shadowBlur = 26;
     g.fillStyle = color;
@@ -129,7 +132,10 @@ export function createWorld3d(city) {
           verts.set([x, city.height(x, z) + 0.14, z], (i * 2 + (s + 1) / 2) * 3);
           uvs.set([cum / 15, s < 0 ? 0 : 1], (i * 2 + (s + 1) / 2) * 2);
         }
-        if (i < n - 1 || road.closed) { const a = i * 2, b = ((i + 1) % n) * 2; idx.push(a, b, a + 1, b, b + 1, a + 1); }
+        // Winding matters: (a, a+1, b) / (b, a+1, b+1) puts the ribbon's face UP. The old
+        // order faced every road DOWN — backface-culled from any above-ground camera, so
+        // no road ever rendered in 3D and every street scene read as cars on grass.
+        if (i < n - 1 || road.closed) { const a = i * 2, b = ((i + 1) % n) * 2; idx.push(a, a + 1, b, b, a + 1, b + 1); }
       }
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
@@ -310,8 +316,8 @@ export function createWorld3d(city) {
   // day cycle — keyframes: phase 0.50 noon, 0.62 golden, 0.685 dusk, 0.78 night-lite
   const KEYS = [
     { p: 0.46, sky: 0x5fb2e8, hor: 0xd8ecf2, fog: 0xbcd8e2, sun: 0xfff2d8, sunI: 1.55, hemi: 0.9, elev: 0.9 },
-    { p: 0.60, sky: 0x5f8fd0, hor: 0xffc98a, fog: 0xd8b490, sun: 0xffbe78, sunI: 1.35, hemi: 0.75, elev: 0.34 },
-    { p: 0.685, sky: 0x2c3e70, hor: 0xff7e47, fog: 0x6b4a5e, sun: 0xff8a50, sunI: 0.55, hemi: 0.5, elev: 0.05 },
+    { p: 0.60, sky: 0x5f8fd0, hor: 0xffcf96, fog: 0xd8b490, sun: 0xffa860, sunI: 1.5, hemi: 0.75, elev: 0.34 },
+    { p: 0.685, sky: 0x2c3e70, hor: 0xff9558, fog: 0x6b4a5e, sun: 0xff7a3c, sunI: 0.82, hemi: 0.52, elev: 0.05 },
     { p: 0.78, sky: 0x111a36, hor: 0x51386b, fog: 0x2c2438, sun: 0x8fa8ff, sunI: 0.22, hemi: 0.34, elev: -0.2 },
     { p: 0.92, sky: 0x3a6ea8, hor: 0xcfe0ea, fog: 0x9fc2d4, sun: 0xffe9c4, sunI: 1.1, hemi: 0.7, elev: 0.5 },
   ];
@@ -357,13 +363,13 @@ export function createWorld3d(city) {
       const target = 0.685 + Math.sin(elapsed * 0.013) * 0.012;
       if (Math.abs(phase - target) > 0.0005) dark = setPhase(phase + clamp(target - phase, -dt * 0.0016, dt * 0.0016));
       water.position.y = -0.75 + Math.sin(elapsed * 0.7) * 0.05;
-      const glow = 0.35 + dark * 0.65;
+      const glow = 0.45 + dark * 0.6;
       for (const s of neonSigns) {
         const flick = s.flicker && Math.sin(elapsed * 31 + s.phase) > 0.86 ? 0.25 : 1;
         s.sign.material.opacity = glow * flick;
-        if (s.halo) s.halo.material.opacity = 0.3 * dark * flick * (0.9 + 0.1 * Math.sin(elapsed * 2 + s.phase));
+        if (s.halo) s.halo.material.opacity = 0.44 * dark * flick * (0.9 + 0.1 * Math.sin(elapsed * 2 + s.phase));
       }
-      if (stripMesh) stripMesh.material.color.setScalar(0.25 + dark * 0.75);
+      if (stripMesh) stripMesh.material.color.setScalar(0.35 + dark * 0.75);
       if (lampBulbs) lampBulbs.color.setHex(0xffe9b0).multiplyScalar(0.35 + dark * 0.85);
       sky.position.copy(camera.position);
     },

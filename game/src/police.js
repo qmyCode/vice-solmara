@@ -10,7 +10,7 @@ import { makeFigure } from './pedestrians.js';
 const HEAT_FOR_STAR = [0, 40, 95, 160, 240, 340];
 const CRIME_HEAT = { shots: 12, carShot: 20, carjack: 30, carjackQuiet: 12, pedShot: 55, pedHit: 60, copHit: 95, explosion: 45, guardDown: 40 };
 const CALLSIGNS = ['GAVIOTA-2', 'HALCÓN-1', 'BRISA-4', 'MUELLE-3', 'FARO-2', 'CORAL-5', 'PALMA-1', 'VIGÍA-6'];
-const COPS_BY_STAR = [0, 2, 3, 4, 5, 6];
+const COPS_BY_STAR = [0, 2, 3, 5, 6, 7];
 
 export function createPolice(G, rng) {
   const city = G.city;
@@ -82,10 +82,11 @@ export function createPolice(G, rng) {
   }
   function spawnCopCar() {
     const pp = G.playerPos();
+    const minD = state.stars >= 3 ? 85 : 120; // hot pursuits roll in closer, so help arrives fast
     for (let tries = 0; tries < 20; tries++) {
       const n = city.randomNode();
       const d = dist2d(n.x, n.z, pp.x, pp.z);
-      if (d > 120 && d < 210 && city.height(n.x, n.z) > 0.3) {
+      if (d > minD && d < 210 && city.height(n.x, n.z) > 0.3) {
         const car = createVehicle(city, 'interceptor', 0x1c1f24, n.x, n.z, Math.atan2(pp.x - n.x, pp.z - n.z), 'police');
         car.unit = unitName();
         car.stuckT = 0; car.path = null; car.pathI = 0; car.footOut = false;
@@ -231,10 +232,14 @@ export function createPolice(G, rng) {
         recalcStars();
       }
     }
-    // fleet size by stars
+    // fleet size by stars — at 3+ stars the fleet musters in pairs per tick, so at
+    // least three pursuers are on the suspect within moments instead of trickling in
     const want = COPS_BY_STAR[state.stars];
     const active = state.cars.filter((c) => c.role === 'police' && !c.exploded);
-    if (active.length < want) spawnCopCar();
+    if (active.length < want) {
+      spawnCopCar();
+      if (state.stars >= 3 && active.length + 1 < want) spawnCopCar();
+    }
     for (let i = state.cars.length - 1; i >= 0; i--) {
       const cop = state.cars[i];
       const d = dist2d(cop.mesh.position.x, cop.mesh.position.z, G.playerPos().x, G.playerPos().z);

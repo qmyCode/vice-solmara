@@ -65,12 +65,20 @@ export function createMinimap(G) {
     return route;
   }
   function drawBlips(g, px, pz, scale) {
+    // traffic — small amber dots, so the map reads as a living city, not an empty chart
+    if (G.traffic) {
+      g.fillStyle = 'rgba(255,190,90,0.85)';
+      for (const c of G.traffic.cars) {
+        if (c.exploded) continue;
+        g.beginPath(); g.arc(px(c.mesh.position.x), pz(c.mesh.position.z), 2.1, 0, Math.PI * 2); g.fill();
+      }
+    }
     // cops
     if (G.police) {
       g.fillStyle = '#3f8cff';
       for (const c of G.police.state.cars) {
         if (c.exploded) continue;
-        g.beginPath(); g.arc(px(c.mesh.position.x), pz(c.mesh.position.z), 3.2, 0, Math.PI * 2); g.fill();
+        g.beginPath(); g.arc(px(c.mesh.position.x), pz(c.mesh.position.z), 3.8, 0, Math.PI * 2); g.fill();
       }
       if (G.police.heliActive && G.police.state.heli) {
         const h = G.police.state.heli.mesh.position;

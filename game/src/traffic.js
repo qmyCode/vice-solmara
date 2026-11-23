@@ -7,7 +7,7 @@ import { clamp, angDiff, dist2d } from './rng.js';
 
 const TRAFFIC_TYPES = ['sedan', 'sedan', 'taxi', 'hatch', 'hatch', 'pickup', 'van', 'sports'];
 const PARKED_COUNT = 52;
-const TRAFFIC_COUNT = 11;
+const TRAFFIC_COUNT = 16;
 
 export function createTraffic(G, rng) {
   const city = G.city;
