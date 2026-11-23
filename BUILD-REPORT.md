@@ -188,3 +188,107 @@ mission 1 `active`, 0 console errors, 64 vehicles / 20 peds live) and a dossier
 smoke (`MAKEFUN_OUTPUT_DIR=/tmp/vice3-out3 node main.ts` → `dossier.json`
 447,885 bytes, game payload 19 files / 862,129 bytes — the payload shrank by
 ~602 KB with the library).
+
+## Overhaul (23 Nov)
+
+Goal: raise the winning margin — the standing entry won every judge game on
+small margins — by making the game visibly denser and re-staging all four
+screenshots as dense multi-system frames (target: final top 7).
+
+Per file:
+
+- `game/src/traffic.js` — routed traffic 11 → 16 cars.
+- `game/src/pedestrians.js` — ambient wanderers 24 → 32.
+- `game/src/police.js` — pursuit reads more aggressive: caps by star
+  [0,2,3,4,5,6] → [0,2,3,5,6,7]; at 3+ stars the fleet musters two cars per
+  tick (at least 3 pursuers on the suspect within moments) and spawns closer
+  (85 m instead of 120 m). Bust/heat balance untouched.
+- `game/src/world3d.js` — golden-hour pass: warmer, stronger sun through the
+  golden/dusk keys the screenshots use (phase 0.665), brighter horizon warmth,
+  stronger neon sign glow and halo presence; neon sign texture now shrinks its
+  font to fit, so long names (TALLER MARISOL, CLÍNICA DEL SOL) no longer clip.
+- `game/src/hud.js` + `game/index.html` — richer HUD at small sizes: wanted
+  stars 21px → 28px, mission panel/title/objective enlarged with a stronger
+  backing, minimap 176 → 192px, dispatch feed enlarged; NEW police response
+  panel (top-right) listing the real pursuit state — nearest units by
+  callsign and role (PURSUIT / ROADBLOCK) with live distances, plus
+  "HALCÓN-9 · AIR UNIT DEPLOYED" while the helicopter is up.
+- `game/src/minimap.js` — minimap now also draws traffic blips (amber) beside
+  the existing police/heli/objective blips; police blips enlarged.
+- `game/src/shots.js` — all four scenes re-staged (below). Staged units are
+  registered with the real police state (callsigns from the game's own
+  dispatch pool) so the minimap blips and response panel are genuine HUD
+  output. Dispatch lines are re-posted every frame in the final 0.4
+  sim-seconds: headless frames take seconds of real time, and the HUD's
+  8-second line expiry otherwise eats the feed before the shutter.
+
+Per screenshot (all real renders via `?shot=` staging, 1280×800, ≤250 KiB):
+
+- `1-cover.jpg` (65,417 B) — the densest frame: Águila GT on Bulevar Costero
+  at dusk, player IN the car at 40 km/h, 4 stars, two interceptors flanking
+  (kept clear of the van's blast line so both survive to the shutter), heli
+  spotlight cone, van explosion plume + debris, a taxi and hatchback trailing
+  as live traffic, pedestrians on the sidewalks, and the FULL HUD: mission
+  panel (Chapter 5, objective + 465 m + 3:33 timer), $4,850 / RESPECT 37,
+  response panel (2 pursuits + air unit), dispatch feed, minimap with
+  police/traffic/heli blips, speedo, all weapon slots unlocked (SMG selected).
+  The old poster treatment (HUD hidden, title art) is gone.
+- `2-dialogue.jpg` (62,393 B) — Marina dialogue two-shot, widened: full
+  TALLER MARISOL neon sign readable, a taxi cruising the forecourt lane
+  behind the characters, two pedestrians at the door corners, mission panel
+  with objective + distance, dialogue box with portrait.
+- `3-chase.jpg` (68,984 B) — Calzada del Este at 108 km/h: BOTH pursuers in
+  frame (rear-quarter + alongside flank), roadblock ahead, heli spotlight,
+  civilian traffic ahead, 4 stars, response panel with 5 rows (2 pursuits,
+  2 roadblock units, air unit), dispatch feed, minimap blips, mid-campaign
+  cash/respect, SMG rack.
+- `4-combat.jpg` (50,956 B) — dockside shootout: SMG tracer + muzzle flash,
+  two guards, burning taxi with smoke plume, an interceptor arriving in
+  frame (listed live in the response panel), two bystanders fleeing the
+  blast, 3 stars, dispatch feed, mission panel with guards-left objective.
+
+Verification: captures via `shots-tool/v4-capture.mjs` — 0 console/page
+errors on every shot; play-test via `shots-tool/v4-playtest.mjs` — 8/8
+checks (boot → title → start → mission 1 active → walk 4.2 m → enter car →
+drive 27.8 m), 0 console errors. Contact-sheet self-check at judge scale
+(cover 768px, others 256px): HUD blocks, stars, minimap and sign remain
+legible shapes; combat is the sparsest small frame.
+
+## Cover re-stage (23 Nov, late)
+
+Root cause found by measurement, not staging taste: the road ribbons in
+world3d.js were wound backwards — every road triangle's normal pointed DOWN
+(sampled normal y = -0.9995), so all asphalt was backface-culled from any
+above-ground camera and NO road ever rendered in 3D (verified: forcing
+DoubleSide at runtime made the full asphalt texture — edge lines, centre
+dashes — appear). One-line winding fix in world3d.js; every street scene in
+the game now sits on a visible road, and dialogue/combat frames gained their
+roads too. game/vendor/three.module.js untouched (md5 identical).
+
+Cover re-staged on Bulevar Costero t=0.79 (Bulevar del Sol), the densest
+canyon stretch measured on the shore road: buildings tight on both sides,
+the 27 m Hotel Brisa Grande (the mission's destination, cyan HOTEL BRISA
+sign) at t=0.78 landward, 3 neon facades within 80 m, palms/lamps, near-flat
+grade (slope 1.2). Same payload as before: hero Águila GT with Rico in it,
+4★, Ch.5 panel + 3:33 timer, $4,850/RESPECT 37, dispatch feed, minimap,
+speedo, weapon slots, van explosion plume behind, live traffic + peds.
+Flanks narrowed (±5 → ±3.8, back 6.5/8.5) so both interceptors hold the
+frame — response panel reads BRISA-4 9 m / GAVIOTA-2 11 m (one unit had
+lagged to 35 m at the wider offset); camera pulled lower/closer
+(+6.2 f / +4.4 s, y +1.45) so asphalt + canyon fill the frame.
+
+Chase re-staged mid-causeway: Calzada del Este's resampled points cluster
+at the mid vertex (t 0.30–0.42 all land at arc ~139 m), so placement was
+chosen by measured arc length — hero t=0.22 (arc 131 m), roadblock t=0.58
+(arc 214 m, 38–40 m ahead at shutter, visible in the heli spotlight pool),
+traffic sedan beyond it t=0.61. Pursuer offsets narrowed to ±4.2 (one unit
+had hung off the deck edge over the water) and cruises raised (35/34.6) so
+both hold 4–5 m flanks in frame. Keeps 108 km/h, 4★, roadblock, heli,
+response panel, feed, minimap.
+
+Re-captured all 4 shots via shots-tool/v4-capture.mjs (1280×800, JPEG,
+0 errors): cover 70,707 B, dialogue 64,360 B, chase 69,500 B, combat
+54,320 B — all ≤250 KiB. Play-test v4: 8/8, 0 errors. Self-check at full
+size, 768×480 and ~256 px: road + lane ribbons visible under the cars in
+cover and chase, buildings flanking, neon present (BRISA sign + roof
+strips), HUD legible at 768 px and readable as complete blocks at 256 px.
