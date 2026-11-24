@@ -9,11 +9,17 @@
 // second isle across a causeway, curved roads with a junction graph and Dijkstra GPS, 9 named
 // districts and ~200 buildings. Third-person on foot and driving, carjacking, routed traffic,
 // pedestrians, an 8-mission story with fixer Marina Vidal (portraits, dialogue, chapter
-// cards), weapons (fists/pistol/SMG), vehicle damage feeding a pooled explosion system with
-// chain reactions, a 5-star wanted system with pursuit AI, dispatch callsigns, roadblocks
-// from 3 stars and a spotlight helicopter from 4, bust and line-of-sight heat loss, a minimap
-// and full map with GPS route, a day cycle settling into neon dusk, 3 synthesized WebAudio
-// radio stations and synth SFX, and a localStorage save (cash, respect, story progress).
+// cards), five weapons with real magazines (fists/pistol/SMG plus a shotgun and rifle the
+// late chapters unlock), vehicle damage and a per-car condition readout feeding a pooled
+// explosion system with chain reactions, a 5-star wanted system with pursuit AI whose units
+// take pursuit/flanking/ramming/roadblock roles, dispatch callsigns, roadblocks from 3 stars
+// and a spotlight helicopter from 4 that tags you IN SIGHT, bust and line-of-sight heat loss,
+// a three-person crew with keybound abilities on cooldowns (plate swap burns a wanted star,
+// quick fix restores the car's condition, eyes out marks roadblocks on the map), district
+// standing that moves with missions and witnessed crimes, a respect rank ladder, health and
+// armour, a minimap and full map with GPS route, a day cycle settling into neon dusk,
+// 3 synthesized WebAudio radio stations with named tracks and synth SFX, and a localStorage
+// save (cash, respect, story progress).
 //
 // Serve it locally with `node serve.ts`, then open http://localhost:8080.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:

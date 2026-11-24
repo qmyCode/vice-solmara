@@ -292,3 +292,74 @@ Re-captured all 4 shots via shots-tool/v4-capture.mjs (1280×800, JPEG,
 size, 768×480 and ~256 px: road + lane ribbons visible under the cars in
 cover and chase, buildings flanking, neon present (BRISA sign + roof
 strips), HUD legible at 768 px and readable as complete blocks at 256 px.
+
+## V2 (top-5 dissection revision)
+
+Built against the forensic gap list from the live top 5. New real systems:
+crew of three with keybound abilities on cooldowns (Z Swap Plates burns one
+wanted star via the police heat model, X Quick Fix restores the current car's
+condition, C Eyes Out marks roadblocks on the minimap for 20 s); district
+standing per district (missions +12 where delivered, witnessed crimes -3,
+HOSTILE/NEUTRAL/FRIENDLY labels); a respect rank ladder (7 titles) with a
+progress bar; vehicle condition from the existing vehicle health, shown on a
+vehicle card beside the speedo; armour that absorbs half of incoming damage;
+real magazines/reserve ammo per weapon plus two new weapons (Breaker shotgun,
+Kestrel AR) unlocked by chapters 7 and 8 and shown locked with hints before
+that. HUD: police response panel with up to 5 ground units whose roles
+(PURSUIT/FLANKING/RAMMING/ROADBLOCK) are derived from the live pursuit
+geometry plus the air unit and a "+N more" line; segmented mission stage bar
++ NEXT from live mission state; health/armour bars with numbers; radio ticker
+with station + track names for the 3 synthesized stations; a prominent
+IN SIGHT tag while the helicopter spotlight is locked; the dispatch feed now
+dedupes lines already on screen (the old cover showed the same GAVIOTA-2
+line twice). Minimap widened so the street grid and GPS route read, with
+roadblocks drawn in red only while Eyes Out is active. Car art pass: chrome
+rims, raked windshields and roof panels, bumpers, skirts, mirrors, twin
+exhausts and a rear light bar on the sports car, POLICÍA door livery on
+interceptors. All four screenshots re-staged at bright golden hour (phase
+0.605-0.615 instead of the murky 0.665 dusk key); the cover hero runs at
+~102 km/h under a pure-pursuit road follower added after the index follower
+wedged the car at speed. Verification: play-test v5 15/15 checks, 0 console
+errors (boot, title, start, Marina interact, mission 1 active, walk, carjack,
+drive, radio switch, vehicle damage, all three crew abilities, ammo spend);
+main.ts run twice, dossier byte-identical; game 902,409 B (cap 48 MiB);
+screenshots 111,590 / 87,287 / 103,226 / 71,295 B at 1280x800, 0 errors each;
+game/vendor/three.module.js byte-identical to the previous build.
+
+## V3 (scene-art iteration on V2)
+
+Built against the real-judge duel evidence: V2's systems were rated equal to the
+top 5 ("depth close") and every remaining loss was decided on look — "plainer box
+architecture", "a sparser street", "flatter geometry", "blockier vehicles". Art and
+staging only; no system was rebuilt.
+
+- `game/src/world3d.js` — facade pass: 8 seeded facade variants (4 low-rise + 4
+  high-rise) with pastel bases, framed window grids with lit/unlit variation,
+  ground-floor storefronts (sign strip with shop label, striped awning band, glass
+  fronts); a parapet cap on every building, rooftop plant boxes, and slanted shop
+  awnings on low-rise fronts. Street props: instanced crates, planters and orange
+  barriers on sidewalks of every road, beach umbrellas on the coast road's sand side.
+  Sky pass: saturated golden keys, sun azimuth tracked to the north-west through the
+  golden band, a two-layer sun-glare sprite riding the real sun direction, and a
+  blimp (pink hull, lit SOLMARA side signs) drifting a slow circuit over the bay and
+  south shore in live play.
+- `game/src/city.js` — building tint palette widened to a cohesive pastel-sunset set.
+- `game/src/vehicles.js` — shape pass on every non-van car: sloped hood panel,
+  tapered nose, rounded roof dome, dark fender trim over each wheel arch; the V2
+  detail kit (rims, glasshouse, light bars, livery, exhausts) untouched.
+- `game/src/shots.js` — cover re-staged: camera lower/closer (hero bigger), FIVE
+  police units on station (response panel: air row + 5 ground rows at 11–32 m),
+  helicopter moved far behind the formation so its spotlight cone shaft crosses the
+  frame and lands on the road, the burning van re-placed from a measured screen
+  projection (+34 f / −7 s: mid-frame at the shutter) with three staged detonations
+  (fresh large fireball + debris over a developed plume), parked cars on both kerbs,
+  12 pedestrians, heat clamped every frame (no stray "escalated — 5 stars" feed
+  line), hero health/wrecked/speed pinned to the staged 72 % / 102 km/h, SMG staged
+  at 30/120 with the pistol stocked at 12/60. Chase gains shoulder-parked cars and
+  bystanders; combat gains a parked hatch and a third bystander; dialogue re-rendered
+  as-is in the improved world.
+- Verification: captures 0 console/page errors, 1280×800 — cover 128,435 B,
+  dialogue 91,714 B, chase 107,347 B, combat 74,504 B (cap 262,144 each);
+  play-test v5 15/15 checks, 0 console errors; `main.ts` run twice → dossier
+  byte-identical; game payload 921,578 B (cap 48 MiB);
+  `game/vendor/three.module.js` byte-identical (md5 4d8e72afd9639e074547992bce6a3de3).
