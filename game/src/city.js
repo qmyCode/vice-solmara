@@ -307,7 +307,7 @@ export function buildCity(seed) {
           rot: Math.atan2(dx, dz) + (side < 0 ? Math.PI : 0) + rng.range(-0.05, 0.05),
           district: dist.name,
           neon: (dist.name === 'Centro Neón' || dist.name === 'Bulevar del Sol') && rng.chance(0.42) ? NEON_NAMES[neonIdx++ % NEON_NAMES.length] : null,
-          tint: rng.pick([0xb8a58e, 0xc7b299, 0xa89a86, 0xd0bfa8, 0x9fb2b5, 0xc9a189, 0xb5c0c8, 0xe0cfae]),
+          tint: rng.pick([0xf0c8a8, 0xe8b4a0, 0xf6ddae, 0xcfe0d8, 0xbcd2e8, 0xe6c8dc, 0xd8e6c0, 0xf2e3c8, 0xc9a189, 0xb5c0c8, 0xe0cfae, 0xd9b8d0]),
         };
         buildings.push(bld);
         colliders.push({ x, z, hw: bld.w / 2, hd: bld.d / 2, rot: bld.rot });

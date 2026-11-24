@@ -28,22 +28,101 @@ function glowTexture() {
 }
 let sharedGlow = null;
 
+function liveryTexture() {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#e8ecf0'; g.fillRect(0, 0, 256, 64);
+  g.fillStyle = '#16283e';
+  g.font = '900 30px Arial';
+  g.textAlign = 'center';
+  g.fillText('POLICÍA', 128, 34);
+  g.font = 'bold 15px Arial';
+  g.fillStyle = '#3f8cff';
+  g.fillText('· SOLMARA ·', 128, 55);
+  return new THREE.CanvasTexture(c);
+}
+let sharedLivery = null;
+
 export function makeCarMesh(type, colorHex) {
   const t = CAR_TYPES[type];
   const grp = new THREE.Group();
   const paint = new THREE.MeshLambertMaterial({ color: colorHex });
   const dark = new THREE.MeshLambertMaterial({ color: 0x22262c });
   const glass = new THREE.MeshLambertMaterial({ color: 0x1d2b3a });
+  const glassLite = new THREE.MeshLambertMaterial({ color: 0x51748c });
+  const chrome = new THREE.MeshLambertMaterial({ color: 0xb9c0c7 });
   const body = new THREE.Mesh(new THREE.BoxGeometry(t.w, t.bodyH, t.l), paint);
   body.position.y = 0.38 + t.bodyH / 2;
   grp.add(body);
+  // hood scoop line + bumpers + side skirts: cheap boxes that break the slab silhouette
+  const bumperF = new THREE.Mesh(new THREE.BoxGeometry(t.w * 0.98, 0.16, 0.22), dark);
+  bumperF.position.set(0, 0.42, t.l / 2 + 0.04);
+  grp.add(bumperF);
+  const bumperR = bumperF.clone();
+  bumperR.position.z = -t.l / 2 - 0.04;
+  grp.add(bumperR);
+  for (const sx of [-1, 1]) {
+    const skirt = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.14, t.l * 0.52), dark);
+    skirt.position.set(sx * (t.w / 2 + 0.01), 0.3, 0);
+    grp.add(skirt);
+    const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.11, 0.16), paint);
+    mirror.position.set(sx * (t.w * 0.46 + 0.06), 0.38 + t.bodyH + t.cabH * 0.55, t.cabBack + t.l * 0.2);
+    grp.add(mirror);
+  }
   const cab = new THREE.Mesh(new THREE.BoxGeometry(t.w * 0.82, t.cabH, t.l * 0.48), type === 'van' ? paint : glass);
   cab.position.set(0, 0.38 + t.bodyH + t.cabH / 2 - 0.04, t.cabBack);
   grp.add(cab);
+  if (type !== 'van') {
+    // raked windshield + rear glass in a lighter tone than the side glass
+    const shield = new THREE.Mesh(new THREE.BoxGeometry(t.w * 0.76, 0.05, t.cabH * 1.15), glassLite);
+    shield.position.set(0, 0.38 + t.bodyH + t.cabH * 0.52, t.cabBack + t.l * 0.26);
+    shield.rotation.x = -0.62;
+    grp.add(shield);
+    const rearGlass = new THREE.Mesh(new THREE.BoxGeometry(t.w * 0.76, 0.05, t.cabH * 1.05), glassLite);
+    rearGlass.position.set(0, 0.38 + t.bodyH + t.cabH * 0.52, t.cabBack - t.l * 0.26);
+    rearGlass.rotation.x = 0.62;
+    grp.add(rearGlass);
+    // roof panel in paint, so the glasshouse reads as glass band + roof, not one block
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(t.w * 0.8, 0.06, t.l * 0.3), paint);
+    roof.position.set(0, 0.38 + t.bodyH + t.cabH + 0.0, t.cabBack);
+    grp.add(roof);
+  }
+  if (type !== 'van') {
+    // V3 shape pass — kill the slab read: a sloped hood panel dropping toward the nose,
+    // a narrower tapered nose panel, a rounded roof dome over the glasshouse, and dark
+    // fender trim over every wheel arch. All cheap boxes / one scaled sphere.
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(t.w * 0.88, 0.07, t.l * 0.3), paint);
+    hood.position.set(0, 0.38 + t.bodyH + 0.005, t.l * 0.335);
+    hood.rotation.x = 0.17;
+    grp.add(hood);
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(t.w * 0.78, t.bodyH * 0.66, 0.26), paint);
+    nose.position.set(0, 0.38 + t.bodyH * 0.42, t.l / 2 + 0.05);
+    grp.add(nose);
+    if (type !== 'pickup') {
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), paint);
+      dome.scale.set(t.w * 0.37, 0.17, t.l * 0.16);
+      dome.position.set(0, 0.38 + t.bodyH + t.cabH - 0.03, t.cabBack);
+      grp.add(dome);
+    }
+    for (const [sx, sz] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) {
+      const arch = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.2, 0.92), dark);
+      arch.position.set(sx * (t.w / 2 + 0.015), 0.6, sz * t.l * 0.31);
+      grp.add(arch);
+    }
+  }
   if (type === 'interceptor') {
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(t.w + 0.02, t.bodyH * 0.5, t.l * 0.5), new THREE.MeshLambertMaterial({ color: 0xe8ecf0 }));
     stripe.position.y = body.position.y;
     grp.add(stripe);
+    if (!sharedLivery) sharedLivery = liveryTexture();
+    for (const sx of [-1, 1]) {
+      const door = new THREE.Mesh(new THREE.PlaneGeometry(t.l * 0.44, t.bodyH * 0.52),
+        new THREE.MeshBasicMaterial({ map: sharedLivery }));
+      door.position.set(sx * (t.w / 2 + 0.015), body.position.y, 0);
+      door.rotation.y = sx > 0 ? Math.PI / 2 : -Math.PI / 2;
+      grp.add(door);
+    }
     const bar = new THREE.Group();
     const base = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.12, 0.4), dark);
     bar.add(base);
@@ -64,6 +143,18 @@ export function makeCarMesh(type, colorHex) {
     const wing = new THREE.Mesh(new THREE.BoxGeometry(t.w * 0.92, 0.07, 0.42), dark);
     wing.position.set(0, 1.06, -t.l / 2 + 0.3);
     grp.add(wing);
+    for (const sx of [-1, 1]) { // wing struts + a centre racing stripe + twin exhausts
+      const strut = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.22, 0.07), dark);
+      strut.position.set(sx * t.w * 0.3, 0.93, -t.l / 2 + 0.3);
+      grp.add(strut);
+      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.22, 8), chrome);
+      pipe.rotation.x = Math.PI / 2;
+      pipe.position.set(sx * 0.32, 0.34, -t.l / 2 - 0.08);
+      grp.add(pipe);
+    }
+    const stripeTop = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.03, t.l * 0.94), new THREE.MeshLambertMaterial({ color: 0x14161c }));
+    stripeTop.position.set(0, 0.38 + t.bodyH + 0.015, 0);
+    grp.add(stripeTop);
     if (!sharedGlow) sharedGlow = glowTexture();
     const glow = new THREE.Mesh(new THREE.PlaneGeometry(t.w + 1.6, t.l + 1.6),
       new THREE.MeshBasicMaterial({ map: sharedGlow, color: 0xff2fd6, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -74,22 +165,34 @@ export function makeCarMesh(type, colorHex) {
   }
   const wheelGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.24, 10);
   wheelGeo.rotateZ(Math.PI / 2);
+  const rimGeo = new THREE.CylinderGeometry(0.17, 0.17, 0.26, 6);
+  rimGeo.rotateZ(Math.PI / 2);
   const wheels = [];
   for (const [sx, sz] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) {
     const w = new THREE.Mesh(wheelGeo, dark);
     w.position.set(sx * (t.w / 2 - 0.05), 0.34, sz * t.l * 0.31);
     grp.add(w);
+    const rim = new THREE.Mesh(rimGeo, chrome); // bright rim face so the wheels read as wheels
+    rim.position.copy(w.position);
+    grp.add(rim);
     wheels.push(w);
+    wheels.push(rim);
   }
   grp.userData.wheels = wheels;
-  const lightGeo = new THREE.BoxGeometry(0.3, 0.12, 0.05);
+  const lightGeo = new THREE.BoxGeometry(0.34, 0.13, 0.05);
   for (const sx of [-1, 1]) {
     const hl = new THREE.Mesh(lightGeo, new THREE.MeshBasicMaterial({ color: 0xfff6cf }));
-    hl.position.set(sx * t.w * 0.32, 0.62, t.l / 2 + 0.01);
+    hl.position.set(sx * t.w * 0.32, 0.62, t.l / 2 + 0.02);
     grp.add(hl);
-    const tl = new THREE.Mesh(lightGeo, new THREE.MeshBasicMaterial({ color: 0xd82424 }));
-    tl.position.set(sx * t.w * 0.32, 0.62, -t.l / 2 - 0.01);
+    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.1, 0.05), new THREE.MeshBasicMaterial({ color: 0xd82424 }));
+    tl.position.set(sx * t.w * 0.26, 0.64, -t.l / 2 - 0.02);
     grp.add(tl);
+  }
+  // a full-width rear light bar on the hero car — its signature at chase distance
+  if (type === 'sports') {
+    const barLight = new THREE.Mesh(new THREE.BoxGeometry(t.w * 0.8, 0.09, 0.04), new THREE.MeshBasicMaterial({ color: 0xff3548 }));
+    barLight.position.set(0, 0.78, -t.l / 2 - 0.02);
+    grp.add(barLight);
   }
   grp.userData.paint = paint;
   return grp;
@@ -207,9 +310,9 @@ export function stepVehicle(G, v, dt, ctl) {
   v.mesh.rotateZ(Math.atan2(hl - hr, 2.8));
   // wheels
   const wheels = v.mesh.userData.wheels;
-  if (wheels) for (let i = 0; i < 4; i++) {
+  if (wheels) for (let i = 0; i < wheels.length; i++) {
     wheels[i].rotation.x += (v.speed * dt) / 0.34;
-    if (i < 2) wheels[i].rotation.y = v.steerVis * 0.9;
+    if (i < 4) wheels[i].rotation.y = v.steerVis * 0.9; // front axle: tyre + rim pairs
   }
   // damage smoke / fire from the engine bay
   if (!v.exploded && v.health < 45) {

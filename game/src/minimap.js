@@ -30,11 +30,11 @@ export function createMinimap(G) {
       g.beginPath();
       road.pts.forEach((p, i) => (i ? g.lineTo(cx(p.x), cz(p.z)) : g.moveTo(cx(p.x), cz(p.z))));
       if (road.closed) g.closePath();
-      g.strokeStyle = '#3c3f45';
+      g.strokeStyle = '#43464d';
       g.lineWidth = road.width * s;
       g.stroke();
-      g.strokeStyle = '#cfc9ba';
-      g.lineWidth = 1.1;
+      g.strokeStyle = '#e8e2d2';
+      g.lineWidth = 1.7;
       g.stroke();
     }
     g.fillStyle = '#e8b23a';
@@ -73,11 +73,18 @@ export function createMinimap(G) {
         g.beginPath(); g.arc(px(c.mesh.position.x), pz(c.mesh.position.z), 2.1, 0, Math.PI * 2); g.fill();
       }
     }
-    // cops
+    // cops — roadblocks stay off the map until Luna's Eyes Out marks them in red
     if (G.police) {
-      g.fillStyle = '#3f8cff';
+      const eyesOut = G.crew && G.crew.eyesOutT > 0;
       for (const c of G.police.state.cars) {
         if (c.exploded) continue;
+        if (c.role === 'roadblock') {
+          if (!eyesOut) continue;
+          g.fillStyle = '#ff4038';
+          g.beginPath(); g.arc(px(c.mesh.position.x), pz(c.mesh.position.z), 4.6 + Math.sin(performance.now() * 0.01) * 1.2, 0, Math.PI * 2); g.fill();
+          continue;
+        }
+        g.fillStyle = '#3f8cff';
         g.beginPath(); g.arc(px(c.mesh.position.x), pz(c.mesh.position.z), 3.8, 0, Math.PI * 2); g.fill();
       }
       if (G.police.heliActive && G.police.state.heli) {
@@ -121,7 +128,7 @@ export function createMinimap(G) {
     currentRoute(dt);
     const W = mm.width, H = mm.height;
     const pp = G.playerPos();
-    const zoom = 1.05; // chart px per world unit on the minimap
+    const zoom = 0.62; // chart px per world unit — wide enough that the street grid reads
     mg.clearRect(0, 0, W, H);
     mg.save();
     mg.beginPath();

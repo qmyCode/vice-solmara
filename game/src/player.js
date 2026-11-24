@@ -18,8 +18,14 @@ export function createPlayer(G) {
   const player = {
     mesh, mode: 'foot', car: null, prevRole: null,
     pos: { x: startX, z: startZ },
-    angle: garage.ang + Math.PI, speed: 0, health: 100,
+    angle: garage.ang + Math.PI, speed: 0, health: 100, armour: 40,
     weapons: G.save.weapons.slice(), weapon: G.save.weapons.includes('smg') ? 'smg' : (G.save.weapons[1] || 'fists'),
+    ammo: {
+      pistol: { mag: 12, res: 60 },
+      smg: { mag: 30, res: 120 },
+      shotgun: { mag: 6, res: 24 },
+      rifle: { mag: 30, res: 90 },
+    },
     cash: G.save.cash, respect: G.save.respect,
     fireCd: 0, hurtT: 0, dead: false, legPhase: 0,
   };
@@ -37,6 +43,12 @@ export function createPlayer(G) {
 
   player.hurt = (dmg, fromX, fromZ) => {
     if (player.dead || G.state !== 'play') return;
+    // the vest eats half of everything until it is shredded
+    if (player.armour > 0) {
+      const absorbed = Math.min(player.armour, dmg * 0.5);
+      player.armour -= absorbed;
+      dmg -= absorbed;
+    }
     player.health -= dmg;
     player.hurtT = 0;
     if (G.hud) G.hud.flashRed();
@@ -53,6 +65,7 @@ export function createPlayer(G) {
     player.mode = 'foot';
     player.dead = false;
     player.health = 100;
+    player.armour = Math.max(player.armour, 40); // the clinic / the desk sergeant hands back a vest
     player.pos.x = at.x; player.pos.z = at.z;
     mesh.visible = true;
     mesh.rotation.x = 0;
@@ -214,6 +227,8 @@ export function createPlayer(G) {
     if (input.pressed.has('Digit1') && player.weapons.includes('fists')) player.weapon = 'fists';
     if (input.pressed.has('Digit2') && player.weapons.includes('pistol')) player.weapon = 'pistol';
     if (input.pressed.has('Digit3') && player.weapons.includes('smg')) player.weapon = 'smg';
+    if (input.pressed.has('Digit4') && player.weapons.includes('shotgun')) player.weapon = 'shotgun';
+    if (input.pressed.has('Digit5') && player.weapons.includes('rifle')) player.weapon = 'rifle';
   };
 
   return player;

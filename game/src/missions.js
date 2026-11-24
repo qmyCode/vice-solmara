@@ -12,6 +12,9 @@ export const CHARACTERS = {
   elias: { name: 'Elías Ferrer', shirt: 0x4a4238, skin: 0x8d5524, hair: 0xbdbdbd, style: 'cap', beard: true },
   tuerta: { name: 'La Tuerta', shirt: 0x23272e, skin: 0xf2c49b, hair: 0x3a2410, style: 'bun', patch: true },
   aurelio: { name: 'Don Aurelio (phone)', shirt: 0x1d2733, skin: 0xf2c49b, hair: 0x0c0c0c, style: 'slick', shades: true },
+  santi: { name: 'Santi Ríos · DRIVER', shirt: 0x1d5f8a, skin: 0x8d5524, hair: 0x0c0c0c, style: 'cap' },
+  paco: { name: 'Paco Delgado · MECHANIC', shirt: 0x5a4632, skin: 0xc68863, hair: 0x3a2410, style: 'short', beard: true },
+  luna: { name: 'Luna Marín · LOOKOUT', shirt: 0x2e7d5b, skin: 0xf2c49b, hair: 0x6b1f2a, style: 'bun' },
 };
 
 /** Draw a character portrait into a 2D context at (0,0,96,96): shoulders, face, hair style, marks. */
@@ -113,7 +116,7 @@ export const MISSIONS = [
     outro: [L('marina', 'The causeway at night, three stars, and you arrive smiling. I begin to understand you, Rico.')],
   },
   {
-    ch: 7, title: 'Mirador Ambush', reward: { cash: 1750, respect: 28 },
+    ch: 7, title: 'Mirador Ambush', reward: { cash: 1750, respect: 28, unlock: 'shotgun' },
     intro: [
       L('tuerta', 'A meet at the Mirador, above the city. My contact sells names — the names of everyone who has been robbing Marina’s people.'),
       L('rico', 'Let me guess. It is a trap.'),
@@ -127,7 +130,7 @@ export const MISSIONS = [
     outro: [L('tuerta', 'Five men went up that hill professionally angry, and one driver came down. I will tell Marina.'), L('marina', 'She already did. One more job, Rico — the biggest.')],
   },
   {
-    ch: 8, title: 'Bay of Sirens', reward: { cash: 2600, respect: 40 },
+    ch: 8, title: 'Bay of Sirens', reward: { cash: 2600, respect: 40, unlock: 'rifle' },
     intro: [
       L('marina', 'Vitral Motors keeps a prototype in the showroom — one of one, worth more than this street. Tonight it becomes ours.'),
       L('rico', 'Steal the prototype, cross the city, deliver it to your garage. Simple.'),
@@ -190,6 +193,16 @@ export function createMissions(G) {
       const s = M.stageState;
       if (!s) return null;
       return { x: s.tx, z: s.tz, label: M.stage.label, dist: 0 };
+    },
+    // Segmented stage bar data for the HUD, straight from the live mission state.
+    stageInfo() {
+      if (M.phase !== 'active') return null;
+      const def = MISSIONS[M.index];
+      if (!def) return null;
+      return {
+        stage: M.stageI + 1, total: def.stages.length,
+        next: def.stages[M.stageI + 1] ? def.stages[M.stageI + 1].label : 'Wrap it up — back to Marina',
+      };
     },
   };
 
@@ -309,8 +322,10 @@ export function createMissions(G) {
     if (def.reward.unlock && !G.player.weapons.includes(def.reward.unlock)) {
       G.player.weapons.push(def.reward.unlock);
       G.player.persist();
-      if (G.hud) G.hud.toast('Weapon unlocked: ' + def.reward.unlock.toUpperCase() + ' (key 3)');
+      const keyNum = { smg: 3, shotgun: 4, rifle: 5 }[def.reward.unlock] || '';
+      if (G.hud) G.hud.toast('Weapon unlocked: ' + def.reward.unlock.toUpperCase() + (keyNum ? ' (key ' + keyNum + ')' : ''));
     }
+    if (G.crew) G.crew.onMissionDone(); // the district where you delivered warms to you
     M.index++;
     G.save.mission = M.index;
     if (M.index >= MISSIONS.length) {

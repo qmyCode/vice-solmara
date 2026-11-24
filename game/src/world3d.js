@@ -4,7 +4,7 @@
 // signs with halo sprites, instanced palms and lamps, named place buildings, and a day cycle
 // that drifts from afternoon and settles into neon dusk.
 import * as THREE from '../vendor/three.module.js';
-import { clamp, lerp, sstep } from './rng.js';
+import { clamp, lerp, sstep, createRng } from './rng.js';
 
 function canvasTexture(w, h, draw) {
   const c = document.createElement('canvas');
@@ -24,16 +24,44 @@ function asphaltTexture() {
     for (let y = 8; y < h; y += 42) g.fillRect(w / 2 - 2, y, 4, 22);
   });
 }
-function facadeTexture(floors, cols) {
+// Facade variants (V3 art pass): each variant is a seeded pastel base with its own window
+// rhythm, lit/unlit mix, sign-strip and awning colours — so neighbouring buildings read as
+// different buildings in one cohesive sunset palette instead of one grey box repeated.
+// The ground floor is drawn as a storefront band (glass, sign strip, striped awning),
+// which is what street-level cameras actually see.
+const FACADE_BASES = ['#f4dcc8', '#eecdbd', '#dde9e2', '#f7e7b8', '#d7e5f2', '#f0d3e2', '#f5e6cf', '#dcedd8'];
+const FACADE_SIGNS = ['#ff4fd8', '#22d3ee', '#ffb02e', '#ff5d5d', '#7CFC9a', '#b78bff'];
+function facadeTexture(floors, cols, variant = 0) {
+  let s = (variant * 7919 + floors * 131 + cols * 17 + 11) >>> 0;
+  const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
   return canvasTexture(128, 256, (g, w, h) => {
-    g.fillStyle = '#cfc8bd'; g.fillRect(0, 0, w, h);
-    const fh = h / floors, cw = w / cols;
+    g.fillStyle = FACADE_BASES[variant % FACADE_BASES.length]; g.fillRect(0, 0, w, h);
+    // faint vertical weathering so the wall is not one flat fill
+    for (let i = 0; i < 26; i++) { g.fillStyle = `rgba(120,90,60,${0.02 + rnd() * 0.04})`; g.fillRect(rnd() * w, 0, 2 + rnd() * 5, h); }
+    const shopH = Math.max(26, h / (floors + 1)); // ground-floor storefront band
+    const winH = h - shopH, fh = winH / floors, cw = w / cols;
     for (let f = 0; f < floors; f++) for (let c = 0; c < cols; c++) {
-      const lit = Math.random() < 0.42;
-      g.fillStyle = lit ? (Math.random() < 0.7 ? '#ffd98a' : '#bfe3ff') : '#3a4150';
-      g.fillRect(c * cw + cw * 0.22, f * fh + fh * 0.24, cw * 0.56, fh * 0.5);
+      const x = c * cw + cw * 0.2, y = f * fh + fh * 0.22, ww = cw * 0.6, hh = fh * 0.52;
+      g.fillStyle = 'rgba(90,70,50,0.35)'; g.fillRect(x - 1.5, y - 1.5, ww + 3, hh + 3); // frame
+      const r = rnd();
+      g.fillStyle = r < 0.34 ? '#ffd98a' : r < 0.5 ? '#bfe3ff' : r < 0.6 ? '#e9f3f8' : '#39424f';
+      g.fillRect(x, y, ww, hh);
+      if (rnd() < 0.3) { g.fillStyle = 'rgba(70,50,40,0.5)'; g.fillRect(x, y + hh + 2, ww, 2.5); } // balcony / sill shadow
     }
-    g.fillStyle = 'rgba(0,0,0,0.16)'; g.fillRect(0, h - 5, w, 5);
+    // storefront: sign strip, striped awning, glass doors/windows below
+    const sy = h - shopH;
+    const sign = FACADE_SIGNS[variant % FACADE_SIGNS.length];
+    g.fillStyle = '#2c2f38'; g.fillRect(0, sy, w, shopH);
+    g.fillStyle = sign; g.fillRect(0, sy, w, shopH * 0.3);
+    g.fillStyle = 'rgba(255,255,255,0.92)';
+    const label = ['BAR', 'CAFÉ', 'HOTEL', 'TIENDA', 'CINE', 'MARISCOS', 'DISCO', 'FARMA'][variant % 8];
+    g.font = `bold ${Math.max(9, shopH * 0.21)}px Arial`; g.textAlign = 'center';
+    g.fillText(label, w / 2, sy + shopH * 0.23);
+    const awnY = sy + shopH * 0.34;
+    for (let x = 0; x < w; x += 10) { g.fillStyle = (x / 10) % 2 ? '#f2ede2' : sign; g.fillRect(x, awnY, 10, shopH * 0.16); }
+    g.fillStyle = '#9fd4e8';
+    for (let x = 6; x < w - 14; x += 24) { g.fillStyle = rnd() < 0.6 ? '#a8d8ea' : '#ffd98a'; g.fillRect(x, awnY + shopH * 0.22, 17, shopH * 0.4); }
+    g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(0, h - 4, w, 4);
   });
 }
 function neonTexture(text, color) {
@@ -167,8 +195,50 @@ export function createWorld3d(city) {
       mesh.instanceMatrix.needsUpdate = true;
       scene.add(mesh);
     };
-    fill(low, facadeTexture(4, 5));
-    fill(high, facadeTexture(11, 6));
+    // four facade variants per band, buildings dealt round-robin — per-building variety
+    for (let v = 0; v < 4; v++) {
+      fill(low.filter((_, i) => i % 4 === v), facadeTexture(4, 5, v));
+      fill(high.filter((_, i) => i % 4 === v), facadeTexture(11, 6, v + 3));
+    }
+    // V3 roofline pass: a parapet cap on EVERY building (slightly overhanging slab at the
+    // roof edge), a rooftop plant box on most, and a slanted shop awning over the ground
+    // floor of low-rise fronts — the three cheapest silhouettes that kill the plain-box read.
+    {
+      const all = city.buildings;
+      const caps = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: 0xffffff }), all.length);
+      const roofs = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: 0x8d8578 }), all.length);
+      const awns = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: 0xffffff }), all.length);
+      let rc = 0, ac = 0;
+      all.forEach((b, i) => {
+        dummy.rotation.set(0, b.rot, 0);
+        dummy.position.set(b.x, b.y + b.h + 0.18, b.z);
+        dummy.scale.set(b.w + 0.55, 0.5, b.d + 0.55);
+        dummy.updateMatrix();
+        caps.setMatrixAt(i, dummy.matrix);
+        caps.setColorAt(i, col.setHex(b.tint).multiplyScalar(0.82));
+        if (i % 5 !== 4) {
+          dummy.position.set(b.x + Math.sin(i * 7.3) * b.w * 0.18, b.y + b.h + 0.75, b.z + Math.cos(i * 5.1) * b.d * 0.18);
+          dummy.scale.set(b.w * 0.3, 1.1, b.d * 0.3);
+          dummy.updateMatrix();
+          roofs.setMatrixAt(rc, dummy.matrix);
+          rc++;
+        }
+        if (b.h <= 20 && i % 4 !== 3) {
+          const fx = Math.sin(b.rot), fz = Math.cos(b.rot);
+          dummy.position.set(b.x + fx * (b.d / 2 + 0.75), b.y + 2.9, b.z + fz * (b.d / 2 + 0.75));
+          dummy.rotation.set(0, b.rot, 0);
+          dummy.rotateX(-0.42);
+          dummy.scale.set(b.w * 0.74, 0.12, 1.9);
+          dummy.updateMatrix();
+          awns.setMatrixAt(ac, dummy.matrix);
+          awns.setColorAt(ac, col.set(NEON_COLORS[(i + 1) % NEON_COLORS.length]));
+          ac++;
+        }
+      });
+      caps.count = all.length; roofs.count = rc; awns.count = ac;
+      caps.instanceMatrix.needsUpdate = true; roofs.instanceMatrix.needsUpdate = true; awns.instanceMatrix.needsUpdate = true;
+      scene.add(caps); scene.add(roofs); scene.add(awns);
+    }
     // neon signs + roof strips
     const stripGeo = new THREE.BoxGeometry(1, 0.28, 1);
     const strips = new THREE.InstancedMesh(stripGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }), Math.max(1, city.buildings.length));
@@ -313,13 +383,128 @@ export function createWorld3d(city) {
     var lampBulbs = bulbMat;
   }
 
+  // street props (V3 density pass): crates, planters and striped barriers on the
+  // sidewalks of every road, plus beach umbrellas on the sand side of the coast road —
+  // deterministic placement, so every street (and every screenshot street) reads lived-in.
+  {
+    const prng = createRng(city.seed ^ 0x9e3779);
+    const dummy = new THREE.Object3D(), col = new THREE.Color();
+    const spots = [];
+    for (const road of city.roads) {
+      for (let i = 2; i < road.pts.length - 1; i += 3) {
+        if (!prng.chance(0.42)) continue;
+        const p = road.pts[i], q = road.pts[i + 1];
+        const dx = q.x - p.x, dz = q.z - p.z, len = Math.hypot(dx, dz) || 1;
+        const side = prng.chance(0.5) ? 1 : -1;
+        const off = road.width / 2 + prng.range(1.7, 2.7);
+        const x = p.x + (-dz / len) * side * off, z = p.z + (dx / len) * side * off;
+        const y = city.height(x, z);
+        if (y < 0.35) continue;
+        spots.push({ x, z, y, ang: Math.atan2(dx, dz), kind: prng.int(0, 2) });
+      }
+    }
+    const mk = (geo, mat) => { const m = new THREE.InstancedMesh(geo, mat, Math.max(1, spots.length)); m.count = 0; scene.add(m); return m; };
+    const crates = mk(new THREE.BoxGeometry(0.95, 0.95, 0.95), new THREE.MeshLambertMaterial({ color: 0xa87f4f }));
+    const planters = mk(new THREE.BoxGeometry(1.7, 0.62, 0.8), new THREE.MeshLambertMaterial({ color: 0xb8b0a2 }));
+    const planterTop = mk(new THREE.BoxGeometry(1.6, 0.3, 0.7), new THREE.MeshLambertMaterial({ color: 0x3f7d3a }));
+    const barriers = mk(new THREE.BoxGeometry(1.9, 0.55, 0.28), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+    for (const s of spots) {
+      dummy.rotation.set(0, s.ang + (s.kind === 2 ? 0.5 : 0), 0);
+      if (s.kind === 0) {
+        dummy.position.set(s.x, s.y + 0.48, s.z); dummy.scale.setScalar(1); dummy.updateMatrix();
+        crates.setMatrixAt(crates.count++, dummy.matrix);
+        if (s.ang > 1) { dummy.position.y = s.y + 1.4; dummy.rotation.y += 0.5; dummy.updateMatrix(); crates.setMatrixAt(crates.count++, dummy.matrix); }
+      } else if (s.kind === 1) {
+        dummy.position.set(s.x, s.y + 0.31, s.z); dummy.scale.setScalar(1); dummy.updateMatrix();
+        planters.setMatrixAt(planters.count++, dummy.matrix);
+        dummy.position.y = s.y + 0.72; dummy.updateMatrix();
+        planterTop.setMatrixAt(planterTop.count++, dummy.matrix);
+      } else {
+        dummy.position.set(s.x, s.y + 0.62, s.z); dummy.scale.setScalar(1); dummy.updateMatrix();
+        barriers.setMatrixAt(barriers.count, dummy.matrix);
+        barriers.setColorAt(barriers.count, col.setHex(0xff7a2e));
+        barriers.count++;
+      }
+    }
+    for (const m of [crates, planters, planterTop, barriers]) m.instanceMatrix.needsUpdate = true;
+    // beach umbrellas where the coast road meets sand (outward side, low ground)
+    const coastRoad = city.roads[0];
+    const umbSpots = [];
+    for (let i = 0; i < coastRoad.pts.length; i += 4) {
+      const p = coastRoad.pts[i];
+      const ol = Math.hypot(p.x, p.z) || 1;
+      const x = p.x + (p.x / ol) * (coastRoad.width / 2 + 5.5), z = p.z + (p.z / ol) * (coastRoad.width / 2 + 5.5);
+      const y = city.height(x, z);
+      if (y > -0.2 && y < 1.1) umbSpots.push({ x, z, y });
+    }
+    if (umbSpots.length) {
+      const poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.05, 2.4, 5), new THREE.MeshLambertMaterial({ color: 0xe8e2d4 }), umbSpots.length);
+      const canopies = new THREE.InstancedMesh(new THREE.ConeGeometry(1.9, 0.75, 8), new THREE.MeshLambertMaterial({ color: 0xffffff }), umbSpots.length);
+      umbSpots.forEach((s, i) => {
+        dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(1);
+        dummy.position.set(s.x, s.y + 1.2, s.z); dummy.updateMatrix();
+        poles.setMatrixAt(i, dummy.matrix);
+        dummy.position.y = s.y + 2.45; dummy.updateMatrix();
+        canopies.setMatrixAt(i, dummy.matrix);
+        canopies.setColorAt(i, col.setHex([0xff5d5d, 0xffb02e, 0x22d3ee, 0xff4fd8][i % 4]));
+      });
+      poles.instanceMatrix.needsUpdate = true; canopies.instanceMatrix.needsUpdate = true;
+      scene.add(poles); scene.add(canopies);
+    }
+  }
+
+  // sun glare + the SOLMARA blimp (V3 sky pass): a two-layer glow sprite that rides the
+  // real sun direction, and a slow dirigible with a lit sign on a circuit over the bay
+  // and the south shore — a real scene object, visible in live play and in the cover.
+  const glowTex = canvasTexture(128, 128, (g) => {
+    const grad = g.createRadialGradient(64, 64, 2, 64, 64, 62);
+    grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+    grad.addColorStop(0.35, 'rgba(255,255,255,0.38)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+  });
+  glowTex.wrapS = glowTex.wrapT = THREE.ClampToEdgeWrapping;
+  const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffbe78, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  sunGlow.scale.set(330, 330, 1);
+  scene.add(sunGlow);
+  const sunCore = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xfff3d0, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  sunCore.scale.set(120, 120, 1);
+  scene.add(sunCore);
+  const blimp = new THREE.Group();
+  {
+    const hull = new THREE.Mesh(new THREE.CapsuleGeometry(3.4, 12, 6, 12), new THREE.MeshLambertMaterial({ color: 0xf2a9c4, emissive: 0x5a3040 }));
+    hull.rotation.x = Math.PI / 2;
+    blimp.add(hull);
+    const belly = new THREE.Mesh(new THREE.CapsuleGeometry(3.0, 11, 6, 12), new THREE.MeshLambertMaterial({ color: 0xf7e3c8, emissive: 0x4a3a26 }));
+    belly.rotation.x = Math.PI / 2; belly.position.y = -0.9; belly.scale.set(0.92, 0.92, 0.96);
+    blimp.add(belly);
+    const finMat = new THREE.MeshLambertMaterial({ color: 0xe86ba0 });
+    const finV = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.6, 2.4), finMat); finV.position.set(0, 1.2, -8.6); blimp.add(finV);
+    const finH = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.3, 2.4), finMat); finH.position.set(0, 0, -8.6); blimp.add(finH);
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.1, 4.2), new THREE.MeshLambertMaterial({ color: 0x37414a }));
+    cab.position.set(0, -3.4, 1.2); blimp.add(cab);
+    const signTex = neonTexture('SOLMARA', '#ffd166');
+    for (const sx of [-1, 1]) {
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(11.5, 2.5), new THREE.MeshBasicMaterial({ map: signTex, transparent: true, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+      sign.position.set(sx * 3.45, 0.1, 0);
+      sign.rotation.y = sx * Math.PI / 2;
+      blimp.add(sign);
+    }
+    blimp.scale.setScalar(1.5);
+    blimp.position.set(-380, 96, -300);
+    scene.add(blimp);
+  }
+
   // day cycle — keyframes: phase 0.50 noon, 0.62 golden, 0.685 dusk, 0.78 night-lite
+  // azim per key (V3): through the golden band the sun tracks to the north-west, low —
+  // the direction the shore boulevard's traffic (and the cover camera) faces into, so
+  // the glare sits in the frame the way the top-5 sunset covers have it.
   const KEYS = [
-    { p: 0.46, sky: 0x5fb2e8, hor: 0xd8ecf2, fog: 0xbcd8e2, sun: 0xfff2d8, sunI: 1.55, hemi: 0.9, elev: 0.9 },
-    { p: 0.60, sky: 0x5f8fd0, hor: 0xffcf96, fog: 0xd8b490, sun: 0xffa860, sunI: 1.5, hemi: 0.75, elev: 0.34 },
-    { p: 0.685, sky: 0x2c3e70, hor: 0xff9558, fog: 0x6b4a5e, sun: 0xff7a3c, sunI: 0.82, hemi: 0.52, elev: 0.05 },
-    { p: 0.78, sky: 0x111a36, hor: 0x51386b, fog: 0x2c2438, sun: 0x8fa8ff, sunI: 0.22, hemi: 0.34, elev: -0.2 },
-    { p: 0.92, sky: 0x3a6ea8, hor: 0xcfe0ea, fog: 0x9fc2d4, sun: 0xffe9c4, sunI: 1.1, hemi: 0.7, elev: 0.5 },
+    { p: 0.46, sky: 0x5fb2e8, hor: 0xd8ecf2, fog: 0xbcd8e2, sun: 0xfff2d8, sunI: 1.55, hemi: 0.9, elev: 0.9, azim: 0.9 },
+    { p: 0.60, sky: 0x4a6fd8, hor: 0xffab5e, fog: 0xe0aa7e, sun: 0xff9a4e, sunI: 1.55, hemi: 0.78, elev: 0.34, azim: 3.5 },
+    { p: 0.685, sky: 0x323e78, hor: 0xff8a4e, fog: 0x74506a, sun: 0xff7a3c, sunI: 0.85, hemi: 0.54, elev: 0.05, azim: 3.8 },
+    { p: 0.78, sky: 0x111a36, hor: 0x51386b, fog: 0x2c2438, sun: 0x8fa8ff, sunI: 0.22, hemi: 0.34, elev: -0.2, azim: 4.3 },
+    { p: 0.92, sky: 0x3a6ea8, hor: 0xcfe0ea, fog: 0x9fc2d4, sun: 0xffe9c4, sunI: 1.1, hemi: 0.7, elev: 0.5, azim: 5.6 },
   ];
   const cA = new THREE.Color(), cB = new THREE.Color();
   function keyLerp(key, a, b, t, target) { target.copy(cA.setHex(a[key])).lerp(cB.setHex(b[key]), t); }
@@ -335,7 +520,7 @@ export function createWorld3d(city) {
     keyLerp('sun', a, b, t, sun.color);
     sun.intensity = lerp(a.sunI, b.sunI, t);
     hemi.intensity = lerp(a.hemi, b.hemi, t);
-    const elev = lerp(a.elev, b.elev, t), azim = lerp(0.7, 2.4, p);
+    const elev = lerp(a.elev, b.elev, t), azim = lerp(a.azim, b.azim, t);
     sun.position.set(Math.cos(azim) * 300, Math.max(elev, -0.1) * 320 + 20, Math.sin(azim) * 300);
     const dark = sstep(0.6, 0.685, p) * (1 - sstep(0.85, 0.95, p));
     waterMat.color.setHex(0x166b84).lerp(cA.setHex(0x0d3350), dark);
@@ -372,6 +557,20 @@ export function createWorld3d(city) {
       if (stripMesh) stripMesh.material.color.setScalar(0.35 + dark * 0.75);
       if (lampBulbs) lampBulbs.color.setHex(0xffe9b0).multiplyScalar(0.35 + dark * 0.85);
       sky.position.copy(camera.position);
+      // sun glare rides the real sun direction, strongest in the golden band the
+      // screenshots use, gone once the sun is below the horizon
+      const sd = sun.position.clone().normalize();
+      const glare = clamp(1 - Math.abs(phase - 0.63) / 0.16, 0, 1) * clamp(sd.y * 3.2, 0, 1);
+      sunGlow.position.copy(camera.position).addScaledVector(sd, 1750);
+      sunCore.position.copy(sunGlow.position);
+      sunGlow.material.opacity = 0.55 * glare;
+      sunCore.material.opacity = 0.95 * glare;
+      sunGlow.visible = sunCore.visible = glare > 0.02;
+      // the blimp drifts its slow circuit over the bay and the south shore
+      const ba = 3.92 + elapsed * 0.011;
+      const bx = Math.cos(ba) * 430, bz = -170 + Math.sin(ba) * 250;
+      blimp.position.set(bx, 94 + Math.sin(elapsed * 0.11) * 3, bz);
+      blimp.lookAt(bx - Math.sin(ba) * 60, blimp.position.y, bz + Math.cos(ba) * 60 * (250 / 430));
     },
   };
 }

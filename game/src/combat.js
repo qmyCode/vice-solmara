@@ -7,9 +7,11 @@ import { makeFigure } from './pedestrians.js';
 import { damageVehicle } from './vehicles.js';
 
 export const WEAPONS = {
-  fists: { name: 'Fists', dmg: 26, rate: 0.38, range: 2.4, auto: false, spread: 0 },
-  pistol: { name: 'Pistol', dmg: 34, rate: 0.3, range: 110, auto: false, spread: 0.008 },
-  smg: { name: 'SMG', dmg: 15, rate: 0.088, range: 95, auto: true, spread: 0.034 },
+  fists: { name: 'Fists', dmg: 26, rate: 0.38, range: 2.4, auto: false, spread: 0, mag: Infinity },
+  pistol: { name: 'Pistol', dmg: 34, rate: 0.3, range: 110, auto: false, spread: 0.008, mag: 12 },
+  smg: { name: 'SMG', dmg: 15, rate: 0.088, range: 95, auto: true, spread: 0.034, mag: 30 },
+  shotgun: { name: 'Breaker', dmg: 62, rate: 0.85, range: 42, auto: false, spread: 0.085, mag: 6 },
+  rifle: { name: 'Kestrel AR', dmg: 23, rate: 0.13, range: 135, auto: true, spread: 0.014, mag: 30 },
 };
 
 export function createCombat(G) {
@@ -116,6 +118,18 @@ export function createCombat(G) {
   function fire(shooter, origin, dirRaw, weaponKey) {
     const w = WEAPONS[weaponKey];
     if (!w) return false;
+    if (shooter.isPlayer && G.player && G.player.ammo && weaponKey !== 'fists') {
+      // real magazines: an empty mag reloads from the reserve, an empty reserve clicks
+      const a = G.player.ammo[weaponKey];
+      if (a) {
+        if (a.mag <= 0) {
+          if (a.res <= 0) return false;
+          const take = Math.min(w.mag, a.res);
+          a.mag = take; a.res -= take;
+        }
+        a.mag -= 1;
+      }
+    }
     if (weaponKey === 'fists') {
       const fx = dirRaw.x, fz = dirRaw.z;
       for (const ped of G.peds.list) {

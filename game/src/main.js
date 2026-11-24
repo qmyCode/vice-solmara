@@ -15,6 +15,7 @@ import { createPlayer } from './player.js';
 import { createPolice } from './police.js';
 import { createMissions } from './missions.js';
 import { createMinimap } from './minimap.js';
+import { createCrew } from './crew.js';
 import { createHud } from './hud.js';
 import { createAudio } from './audio.js';
 import { loadSave } from './save.js';
@@ -54,6 +55,7 @@ G.playerVelocity = () => {
 G.traffic = createTraffic(G, rng);
 G.police = createPolice(G, rng);
 G.missions = createMissions(G);
+G.crew = createCrew(G);
 G.minimap = createMinimap(G);
 G.hud = createHud(G);
 G.onInteract = () => { G.missions.tryInteract(); };
@@ -196,6 +198,7 @@ function stepWorld(dt, { live = true } = {}) {
   G.player.update(dt);
   G.police.update(dt);
   G.missions.update(dt);
+  G.crew.update(dt);
   G.audio.update(dt);
 }
 
@@ -294,7 +297,19 @@ window.__game = {
       peds: G.peds.list.length,
       playerPos: { x: Math.round(G.player.pos.x), z: Math.round(G.player.pos.z) },
       health: Math.round(G.player.health),
+      armour: Math.round(G.player.armour),
       cash: G.player.cash,
+      respect: G.player.respect,
+      weapon: G.player.weapon,
+      ammo: G.player.ammo[G.player.weapon] || null,
+      carHealth: G.player.car ? Math.round(G.player.car.health) : null,
+      carSpeedKmh: G.player.car ? Math.round(Math.abs(G.player.car.speed) * 3.6) : 0,
+      crewCds: G.crew.members.map((m) => Math.round(m.cd * 10) / 10),
+      eyesOut: G.crew.eyesOutT > 0,
+      district: G.crew.currentStanding(),
+      rank: G.crew.rankFor(G.player.respect).title,
+      station: G.audio.currentStation ? G.audio.currentStation.name : null,
+      heliLocked: G.police.heliLocked,
     };
   },
 };

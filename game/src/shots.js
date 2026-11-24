@@ -57,13 +57,36 @@ function roadFollower(city, roadName, t0) {
   const road = city.roads.find((r) => r.name === roadName);
   return { road, idx: Math.round(t0 * (road.pts.length - 1)) };
 }
-function followRoad(G, car, F, dirSign, cruise, dt) {
+function followRoad(G, car, F, dirSign, cruise, dt, ahead = 6) {
   const pts = F.road.pts;
   const cp = car.mesh.position;
   const cur = pts[F.idx];
   if (Math.hypot(cur.x - cp.x, cur.z - cp.z) < 5) F.idx = Math.max(0, Math.min(pts.length - 1, F.idx + dirSign));
-  const ti = Math.max(0, Math.min(pts.length - 1, F.idx + dirSign * 6));
+  const ti = Math.max(0, Math.min(pts.length - 1, F.idx + dirSign * ahead));
   driveAlong(G, car, dt, pts[ti].x, pts[ti].z, cruise);
+}
+// Pure-pursuit along the road polyline: the target is a fixed arc distance ahead of the
+// car's nearest point ON the path, so a fast car tracks the road through bends instead
+// of cutting corners into the buildings (the index-based follower above is fine at
+// cruise speeds, but at ~28 m/s its raw point targets pulled the V2 cover hero off the
+// boulevard and wedged it against a facade).
+function pathFollower(city, roadName, t0) {
+  const road = city.roads.find((r) => r.name === roadName);
+  const F = { pts: road.pts, idx: Math.round(t0 * (road.pts.length - 1)) };
+  F.target = (car, look) => {
+    const cp = car.mesh.position;
+    while (F.idx < F.pts.length - 2 &&
+      Math.hypot(F.pts[F.idx + 1].x - cp.x, F.pts[F.idx + 1].z - cp.z) < Math.hypot(F.pts[F.idx].x - cp.x, F.pts[F.idx].z - cp.z)) F.idx++;
+    let remain = look, i = F.idx, px = cp.x, pz = cp.z;
+    while (i < F.pts.length - 1) {
+      const q = F.pts[i + 1];
+      const d = Math.hypot(q.x - px, q.z - pz);
+      if (d >= remain) { const f = d > 0 ? remain / d : 0; return { x: px + (q.x - px) * f, z: pz + (q.z - pz) * f }; }
+      remain -= d; px = q.x; pz = q.z; i++;
+    }
+    return F.pts[F.pts.length - 1];
+  };
+  return F;
 }
 // Dispatch lines expire after 8 real seconds, and headless frames can take seconds of
 // real time each — at that frame rate even a late-posted feed can expire into a
@@ -75,12 +98,29 @@ function keepFeed(G, lines, S) {
   if (S && S.t < S.finishAt - 0.4) return;
   for (const line of lines) G.hud.dispatch(line);
 }
+// Shared mid-campaign staging for the V2 scenes: bankroll, respect, a vest, the radio
+// on, and crew cooldowns mid-sweep — all written into the real player/crew/audio state
+// the HUD renders, exactly where live play would have put them.
+function stageProgression(G, { cash, respect, health, armour, station, cds, standing }) {
+  G.player.cash = cash;
+  G.player.respect = respect;
+  G.player.health = health;
+  G.player.armour = armour;
+  if (!G.player.weapons.includes('smg')) G.player.weapons.push('smg');
+  G.audio.setStation(station);
+  G.crew.members.forEach((m, i) => { m.cd = cds[i] || 0; });
+  if (standing) for (const [d, v] of Object.entries(standing)) G.crew.standing[d] = v;
+}
+
 export function stageShot(G, name) {
   const city = G.city;
-  G.world.setPhase(0.665);
+  // V2 lighting: BRIGHT golden hour (0.605–0.615), not the old murky 0.665 dusk key —
+  // facades, liveries and palms read clearly, the way the top-5 covers are lit.
+  const PHASES = { cover: 0.605, dialogue: 0.615, chase: 0.61, combat: 0.615 };
+  G.world.setPhase(PHASES[name] ?? 0.61);
   G.hud.hideTitle();
   G.hud.showHud();
-  const S = { t: 0, name, boomed: false, boomed2: false, update: null };
+  const S = { t: 0, name, boomed: false, boomed2: false, boomed3: false, update: null };
   const finishAt = name === 'cover' ? 1.7 : name === 'dialogue' ? 1.1 : 1.5;
 
   if (name === 'cover') {
@@ -104,98 +144,171 @@ export function stageShot(G, name) {
     const sf = { x: Math.sin(heroAng), z: Math.cos(heroAng) }; // forward
     const ss = { x: Math.cos(heroAng), z: -Math.sin(heroAng) }; // side (seaward on this shore)
     const hero = createVehicle(city, 'sports', 0xff8c1a, start.x, start.z, heroAng, 'parked');
-    hero.speed = 11;
+    hero.speed = 28.5; // staged AT SPEED — the speedo reads ~103 km/h in the frame
+    hero.health = 72; // a dented hero: the vehicle card reads real vehicle health
     G.scene.add(hero.mesh); G.vehicles.push(hero);
     G.player.enterCar(hero);
-    // Mid-campaign progression, staged on the real player state the HUD renders: a
-    // bankroll and respect earned by chapter 5, and the full weapon rack unlocked.
-    G.player.cash = 4850;
-    G.player.respect = 37;
-    if (!G.player.weapons.includes('smg')) G.player.weapons.push('smg');
+    // Mid-campaign progression, staged on the real player state the HUD renders.
+    stageProgression(G, {
+      cash: 4850, respect: 137, health: 84, armour: 55, station: 1,
+      cds: [0, 21, 0], standing: { 'Bulevar del Sol': 58 },
+    });
     G.player.weapon = 'smg';
+    // A healthy mid-tier loadout in the frame: SMG selected with a full mag and deep
+    // reserve, the pistol visibly stocked beside it (the rack reads stocked, not bare).
+    G.player.ammo.smg = { mag: 30, res: 120 };
+    G.player.ammo.pistol = { mag: 12, res: 60 };
     // Flanks sit wide of the van's blast line: the landward unit trails further back,
     // because a tighter landward flank gets chain-cooked by the van explosion and the
     // frame loses a pursuer (and its minimap blip / response-panel row).
     const copA = createVehicle(city, 'interceptor', 0x1c1f24,
-      start.x - sf.x * 6.5 + ss.x * 3.8, start.z - sf.z * 6.5 + ss.z * 3.8, heroAng, 'parked');
-    copA.speed = 11;
+      start.x - sf.x * 8 + ss.x * 3.8, start.z - sf.z * 8 + ss.z * 3.8, heroAng, 'parked');
+    copA.speed = 28.5;
     const copB = createVehicle(city, 'interceptor', 0x1c1f24,
-      start.x - sf.x * 8.5 - ss.x * 3.8, start.z - sf.z * 8.5 - ss.z * 3.8, heroAng, 'parked');
-    copB.speed = 11;
-    G.scene.add(copA.mesh, copB.mesh); G.vehicles.push(copA, copB);
+      start.x - sf.x * 10.5 - ss.x * 3.8, start.z - sf.z * 10.5 - ss.z * 3.8, heroAng, 'parked');
+    copB.speed = 28.5;
+    const copC = createVehicle(city, 'interceptor', 0x1c1f24,
+      start.x - sf.x * 16 + ss.x * 0.5, start.z - sf.z * 16 + ss.z * 0.5, heroAng, 'parked');
+    copC.speed = 28.5;
+    // V3: two more units trail the formation so the response panel lists FIVE ground
+    // rows under the air row — the top-5 covers all show a full response, and the V2
+    // cover's three rows read thin next to them.
+    const copD = createVehicle(city, 'interceptor', 0x1c1f24,
+      start.x - sf.x * 23 - ss.x * 3.2, start.z - sf.z * 23 - ss.z * 3.2, heroAng, 'parked');
+    copD.speed = 28.5;
+    const copE = createVehicle(city, 'interceptor', 0x1c1f24,
+      start.x - sf.x * 26 + ss.x * 3.4, start.z - sf.z * 26 + ss.z * 3.4, heroAng, 'parked');
+    copE.speed = 28.5;
+    // Stunt armour for the law: a chain blast must not write a unit out of the frame
+    // (and out of the response panel) before the shutter — they still burn and smoke.
+    copA.health = 400; copB.health = 400; copC.health = 400; copD.health = 400; copE.health = 400;
+    G.scene.add(copA.mesh, copB.mesh, copC.mesh, copD.mesh, copE.mesh); G.vehicles.push(copA, copB, copC, copD, copE);
     // Register the staged law with the real police state so the minimap draws their
     // blips and the response panel lists them (police.update never runs in shot mode,
     // so this is display-only). Callsigns come from the game's own dispatch pool.
-    copA.role = 'police'; copB.role = 'police';
-    copA.unit = 'GAVIOTA-2'; copB.unit = 'BRISA-4';
-    G.police.state.cars.push(copA, copB);
+    copA.role = 'police'; copB.role = 'police'; copC.role = 'police'; copD.role = 'police'; copE.role = 'police';
+    copA.unit = 'GAVIOTA-2'; copB.unit = 'BRISA-4'; copC.unit = 'CORAL-5'; copD.unit = 'PALMA-1'; copE.unit = 'VIGÍA-6';
+    G.police.state.cars.push(copA, copB, copC, copD, copE);
+    // Parked cars lining both kerbs of the boulevard stretch in frame — a working
+    // street, not an emptied set (V3 density pass). Offset ±10.6: fully off the
+    // carriageway, so the formation's corner-cutting steering never snags on them.
+    for (const [along, side, type, color] of [[7, 10.6, 'sedan', 0x3e6fb0], [-13, -10.6, 'hatch', 0x5ba24a], [-24, 10.6, 'pickup', 0x8c4a2e], [-33, -10.6, 'sedan', 0xc0c4c9]]) {
+      const pk = createVehicle(city, type, color,
+        start.x + sf.x * along + ss.x * side, start.z + sf.z * along + ss.z * side,
+        side > 0 ? heroAng : heroAng + Math.PI, 'parked');
+      G.scene.add(pk.mesh); G.vehicles.push(pk);
+    }
     // Ambient traffic sharing the boulevard: two cars trailing the pack down the same
     // road (the camera looks back along the road, so the queue behind the law is what
     // reads in frame), both following the real road.
     const behindPt = roadPointAt(city, 'Bulevar Costero', 0.766);
     const behind = createVehicle(city, 'hatch', 0xd8d3c8, behindPt.x, behindPt.z, behindPt.ang, 'parked');
-    behind.speed = 11;
+    behind.speed = 28;
     const behind2Pt = roadPointAt(city, 'Bulevar Costero', 0.7745);
     const behind2 = createVehicle(city, 'taxi', 0xf2b21b, behind2Pt.x, behind2Pt.z, behind2Pt.ang, 'parked');
-    behind2.speed = 11;
+    behind2.speed = 28;
     G.scene.add(behind.mesh, behind2.mesh); G.vehicles.push(behind, behind2);
     const BF = roadFollower(city, 'Bulevar Costero', 0.766);
     const BF2 = roadFollower(city, 'Bulevar Costero', 0.7745);
     // Pedestrians on the sidewalks BEHIND the hero — the stretch of street the camera
     // actually sees — so the boulevard reads lived-in, not emptied for the shot.
-    for (const [along, side] of [[-6, 8.6], [-11, -8.2], [-17, 8.8]]) {
+    for (const [along, side] of [[-6, 8.6], [-9, -8.2], [-11, 8.2], [-15, -8.6], [-17, 8.8], [-20, -8.3], [-23, -8.5], [-26, 8.5], [-28, 8.4], [-31, -8.7], [-34, -8.8], [5, -8.4]]) {
       G.peds.spawn(start.x + sf.x * along + ss.x * side, start.z + sf.z * along + ss.z * side);
     }
-    // The van sits spun-out on the landward shoulder just ahead of the start point, so the
-    // hero passes it in the first moments and it blows up close behind the hero's shoulder
-    // — near enough that its plume towers into the sunset instead of reading as confetti.
+    // The van sits spun-out on the landward lane ahead of the start point. Placement
+    // was solved from a measured projection, not by eye: at +34 f / +7.5 s the wreck
+    // projects off the RIGHT edge at the shutter (the boulevard's curve rotates the
+    // hero's frame ~11° over the take); at +34 f / −7 s it lands mid-frame, ~17 m
+    // behind the hero, as the hero passes it and it blows up in the mid-frame. Its
+    // blasts land when the hero is 5–20 m past, and the hero's staged health floor
+    // absorbs the splash.
     const van = createVehicle(city, 'van', 0x7a8a99,
-      start.x + sf.x * 3 - ss.x * 5.2, start.z + sf.z * 3 - ss.z * 5.2, heroAng + 0.5, 'parked');
+      start.x + sf.x * 34 - ss.x * 7, start.z + sf.z * 34 - ss.z * 7, heroAng + 0.5, 'parked');
     G.scene.add(van.mesh); G.vehicles.push(van);
-    const heli = stuntHeli(G, start.x - sf.x * 6 - ss.x * 14, city.height(start.x, start.z) + 29, start.z - sf.z * 6 - ss.z * 14, 8.5, 0.1);
-    heli.spot.target.position.set(0, -29, -7);
-    heli.spot.intensity = 700; // a rake of light behind the law, not a floodlight on the hero
+    // V3 heli: FAR behind the formation and lower than V2, so the cone shaft crosses
+    // the frame instead of hovering above it — the cone base lands ON the asphalt
+    // behind the hero, entering from the top edge over the trailing units.
+    const heli = stuntHeli(G, start.x - sf.x * 30 - ss.x * 5, city.height(start.x, start.z) + 25, start.z - sf.z * 30 - ss.z * 5, 11, 0.2);
+    heli.spot.target.position.set(2, -25, 6);
+    heli.spot.intensity = 1100; // the pool lands on the road behind the hero, not on the hero
     G.police.state.heli = { mesh: heli.grp };
     G.police.state.heliActive = true; // minimap heli blip (display-only, as above)
     G.police.setWanted(4);
-    G.hud.setMission(5, 'Golden Hour Run', 'Outrun the interceptors — reach the Hotel Brisa Grande');
+    G.hud.setMission(5, 'Golden Hour Run', 'Outrun the interceptors — reach the Hotel Brisa Grande',
+      { stage: 2, total: 3, next: 'Lose the tail — park it clean at the Hotel Brisa Grande' });
+    // The crew talks in the cover, the way the top-5 covers do: Santi on the radio,
+    // portrait chip and all, through the game's real dialogue box.
+    G.hud.showDialogue({ who: 'santi', text: 'Plates are hot and the Brisa is two blocks up — punch it, Rico. Say the word and I burn the heat.' });
     const FEED = [
       'HALCÓN-9: airborne — spotlight on the orange Águila, Bulevar Costero.',
       'Dispatch: van fire on the boulevard — suspect is running east.',
       'GAVIOTA-2: flanking the suspect, requesting a second unit.',
     ];
-    const HF = roadFollower(city, 'Bulevar Costero', 0.79);
+    const HP = pathFollower(city, 'Bulevar Costero', 0.79);
     S.update = (dt) => {
       keepFeed(G, FEED, S);
       G.hud.setTimer(Math.max(0, 214 - Math.floor(S.t))); // the run is against the clock
-      followRoad(G, hero, HF, 1, 11, dt);
-      followRoad(G, behind, BF, 1, 11.2, dt);
-      followRoad(G, behind2, BF2, 1, 11.3, dt);
+      const ht = HP.target(hero, 15);
+      driveAlong(G, hero, dt, ht.x, ht.z, 28.5);
+      followRoad(G, behind, BF, 1, 27.9, dt);
+      followRoad(G, behind2, BF2, 1, 28, dt);
+      // The staged dent is the floor: blast and bumper noise may not write the hero
+      // down past it mid-take (the same pinning the frame's 4 stars already use).
+      // The wrecked flag is pinned too: one transient dip under 30 health would
+      // otherwise latch the limp cap (top speed × 0.55) and the speedo would fall
+      // out of the >100 km/h staging for the rest of the take.
+      if (!hero.exploded) {
+        if (hero.health < 72) hero.health = 72;
+        hero.wrecked = false;
+        // A blast-clamped speed may not sag the take below the staged pace either:
+        // the run is staged AT 102 km/h, so the floor holds it there.
+        if (hero.speed < 27.8) hero.speed = 28.5;
+      }
       const hp0 = hero.mesh.position;
       G.player.pos.x = hp0.x; G.player.pos.z = hp0.z;
       const fx = Math.sin(hero.angle), fz = Math.cos(hero.angle);
       const sx = Math.cos(hero.angle), sz = -Math.sin(hero.angle);
       // Flank targets: behind the hero, offset to each rear quarter. Cruise matched to
       // the hero's so the formation holds instead of the law rear-ending its quarry.
-      driveAlong(G, copA, dt, hp0.x - fx * 6.5 + sx * 3.8, hp0.z - fz * 6.5 + sz * 3.8, 11.15);
-      driveAlong(G, copB, dt, hp0.x - fx * 8.5 - sx * 3.8, hp0.z - fz * 8.5 - sz * 3.8, 11.1);
-      heli.grp.position.x = hp0.x - fx * 6 - sx * 14;
-      heli.grp.position.z = hp0.z - fz * 6 - sz * 14;
-      heli.grp.position.y = city.height(hp0.x, hp0.z) + 29;
+      driveAlong(G, copA, dt, hp0.x - fx * 8 + sx * 3.8, hp0.z - fz * 8 + sz * 3.8, 28.7);
+      driveAlong(G, copB, dt, hp0.x - fx * 10.5 - sx * 3.8, hp0.z - fz * 10.5 - sz * 3.8, 28.6);
+      driveAlong(G, copC, dt, hp0.x - fx * 16 + sx * 0.5, hp0.z - fz * 16 + sz * 0.5, 28.65);
+      driveAlong(G, copD, dt, hp0.x - fx * 23 - sx * 3.2, hp0.z - fz * 23 - sz * 3.2, 28.6);
+      driveAlong(G, copE, dt, hp0.x - fx * 26 + sx * 3.4, hp0.z - fz * 26 + sz * 3.4, 29.1);
+      heli.grp.position.x = hp0.x - fx * 30 - sx * 5;
+      heli.grp.position.z = hp0.z - fz * 30 - sz * 5;
+      heli.grp.position.y = city.height(hp0.x, hp0.z) + 25;
       heli.grp.lookAt(hp0.x, heli.grp.position.y - 8, hp0.z);
       heli.rotor.rotation.y += dt * 30;
-      if (!S.boomed && S.t > 0.35) { S.boomed = true; damageVehicle(G, van, 500, 'shot'); }
-      if (!S.boomed2 && S.t > 0.92) { S.boomed2 = true; G.explosions.boom(van.mesh.position.x, van.mesh.position.y + 1, van.mesh.position.z, { radius: 6 }); }
-      // The blast's own heat reports stack past the staged level — pin the frame at 4 stars.
-      if (S.boomed2 && G.police.stars !== 4) G.police.setWanted(4);
-      // Low, close front three-quarter at a true 45°: the hero's face and seaward flank
-      // fill the right of the frame, both interceptors flanking behind it, the burning
-      // van over its landward shoulder, traffic and pedestrians sharing the street,
-      // neon-signed buildings lining the street beyond — HUD on throughout.
+      if (!S.boomed && S.t > 1.25) { S.boomed = true; damageVehicle(G, van, 500, 'shot'); }
+      if (!S.boomed2 && S.t > 1.45) { S.boomed2 = true; G.explosions.boom(van.mesh.position.x, van.mesh.position.y + 1, van.mesh.position.z, { radius: 6 }); }
+      // A third, bigger cook-off late in the take: at the shutter the fireball is still
+      // young and LARGE over the van, on top of the developed plume from the first two.
+      if (!S.boomed3 && S.t > 1.58) { S.boomed3 = true; G.explosions.boom(van.mesh.position.x, van.mesh.position.y + 1.2, van.mesh.position.z, { radius: 7.5 }); }
+      // The blast's own heat reports (and any staged ped incident) stack past the staged
+      // level — clamp the heat every frame so the frame can never cross into 5 stars
+      // and post a contradicting "escalated" line into the feed.
+      if (G.police.stars !== 4 || G.police.heat > 260) G.police.setWanted(4);
+      // A unit's straight-line steering can snag on street furniture and lag out of
+      // the formation — if any unit falls well behind its station, quietly re-place
+      // it on station (off-frame staging; the unit, its blip and its panel row stay
+      // the real thing).
+      for (const [cop, back, side] of [[copA, 8, 3.8], [copB, 10.5, -3.8], [copC, 16, 0.5], [copD, 23, -3.2], [copE, 26, 3.4]]) {
+        const tx = hp0.x - fx * back + sx * side, tz = hp0.z - fz * back + sz * side;
+        if (Math.hypot(cop.mesh.position.x - tx, cop.mesh.position.z - tz) > 26) {
+          cop.mesh.position.set(tx, city.height(tx, tz) + 0.05, tz);
+          cop.angle = hero.angle;
+          cop.speed = 28.5;
+        }
+      }
+      // V3: lower and closer than V2 — the hero looms BIG in the right of the frame,
+      // five interceptors stream out behind it under the heli cone, the burning van's
+      // fireball towers over its landward shoulder, parked cars and pedestrians line
+      // both kerbs, facade-rich buildings canyon the street beyond — HUD throughout.
       const hp = hero.mesh.position;
-      G.camera.position.set(hp.x + fx * 6.2 + sx * 4.4, hp.y + 1.45, hp.z + fz * 6.2 + sz * 4.4);
-      G.camera.lookAt(hp.x - fx * 1.2, hp.y + 0.9, hp.z - fz * 1.2);
-      G.camera.fov = 60; G.camera.updateProjectionMatrix();
+      G.camera.position.set(hp.x + fx * 4.9 + sx * 3.6, hp.y + 1.28, hp.z + fz * 4.9 + sz * 3.6);
+      G.camera.lookAt(hp.x - fx * 1.1, hp.y + 0.88, hp.z - fz * 1.1);
+      G.camera.fov = 58; G.camera.updateProjectionMatrix();
     };
   } else if (name === 'dialogue') {
     // Staged on the Taller Marisol forecourt: the building's door and neon sign face along
@@ -219,7 +332,12 @@ export function stageShot(G, name) {
     G.player.mesh.rotation.y = G.player.angle;
     if (marina) marina.mesh.rotation.y = Math.atan2(G.player.pos.x - mx, G.player.pos.z - mz);
     if (G.player.weapons.includes('pistol')) G.player.weapon = 'pistol';
-    G.hud.setMission(1, 'First Wheels', 'Take the Águila GT to the Hotel Brisa Grande');
+    stageProgression(G, {
+      cash: 900, respect: 18, health: 100, armour: 40, station: 2,
+      cds: [0, 0, 12], standing: { 'Puerto Viejo': 62 },
+    });
+    G.hud.setMission(1, 'First Wheels', 'Take the Águila GT to the Hotel Brisa Grande',
+      { stage: 1, total: 1, next: 'Park it pretty at the Hotel Brisa Grande' });
     G.hud.showDialogue(MISSIONS[0].intro[0]);
     // The street lives behind the two-shot: a taxi cruises along the forecourt lane
     // between the garage door and the characters (along the r axis, visible in the
@@ -243,18 +361,23 @@ export function stageShot(G, name) {
     const start = roadPointAt(city, 'Calzada del Este', 0.22);
     const hero = createVehicle(city, 'sports', 0xe83e6b, start.x, start.z, start.ang, 'parked');
     hero.speed = 27; // already at speed when the shutter opens
+    hero.health = 84;
     G.scene.add(hero.mesh); G.vehicles.push(hero);
     G.player.enterCar(hero);
     // Same mid-campaign progression as the cover: bankroll, respect, full weapon rack.
-    G.player.cash = 4850;
-    G.player.respect = 37;
-    if (!G.player.weapons.includes('smg')) G.player.weapons.push('smg');
+    stageProgression(G, {
+      cash: 4850, respect: 137, health: 91, armour: 48, station: 3,
+      cds: [0, 9, 0], standing: { 'Bahía Este': 47 },
+    });
     G.player.weapon = 'smg';
+    G.crew.eyesOutT = 16; // Luna is watching: the roadblock ahead shows on the minimap
     const copA = createVehicle(city, 'interceptor', 0x1c1f24, start.x - Math.sin(start.ang) * 8 + Math.cos(start.ang) * 4.2, start.z - Math.cos(start.ang) * 8 - Math.sin(start.ang) * 4.2, start.ang, 'parked');
     copA.speed = 32.5; // already in formation at speed, so the shutter catches them in frame
     const copB = createVehicle(city, 'interceptor', 0x1c1f24, start.x - Math.sin(start.ang) * 5 - Math.cos(start.ang) * 4.2, start.z - Math.cos(start.ang) * 5 + Math.sin(start.ang) * 4.2, start.ang, 'parked');
     copB.speed = 32.5;
-    G.scene.add(copA.mesh, copB.mesh); G.vehicles.push(copA, copB);
+    const copC = createVehicle(city, 'interceptor', 0x1c1f24, start.x - Math.sin(start.ang) * 12 - Math.cos(start.ang) * 0.5, start.z - Math.cos(start.ang) * 12 + Math.sin(start.ang) * 0.5, start.ang, 'parked');
+    copC.speed = 32.5;
+    G.scene.add(copA.mesh, copB.mesh, copC.mesh); G.vehicles.push(copA, copB, copC);
     const blockPt = roadPointAt(city, 'Calzada del Este', 0.58);
     const blockUnits = ['MUELLE-3', 'FARO-2'];
     [-2.7, 2.7].forEach((off, i) => {
@@ -264,21 +387,31 @@ export function stageShot(G, name) {
       G.scene.add(b.mesh); G.vehicles.push(b);
       G.police.state.cars.push(b); // minimap blip + response panel (display-only in shot mode)
     });
-    copA.role = 'police'; copB.role = 'police';
-    copA.unit = 'GAVIOTA-2'; copB.unit = 'CORAL-5';
-    G.police.state.cars.push(copA, copB);
+    copA.role = 'police'; copB.role = 'police'; copC.role = 'police';
+    copA.unit = 'GAVIOTA-2'; copB.unit = 'CORAL-5'; copC.unit = 'PALMA-1';
+    G.police.state.cars.push(copA, copB, copC);
     // Civilian traffic ahead on the calzada — the chase threads through a living road.
     const trafPt = roadPointAt(city, 'Calzada del Este', 0.61);
     const traf = createVehicle(city, 'sedan', 0xd8d3c8, trafPt.x, trafPt.z, trafPt.ang, 'parked');
     traf.speed = 24;
     G.scene.add(traf.mesh); G.vehicles.push(traf);
+    // V3 density: parked cars on the causeway shoulders + bystanders near the start,
+    // so the chase frame carries the same street life as the cover.
+    for (const [tt, side, type, color] of [[0.33, 8.6, 'hatch', 0xd8542e], [0.42, -8.6, 'sedan', 0x4a90c2]]) {
+      const pp2 = roadPointAt(city, 'Calzada del Este', tt);
+      const pk = createVehicle(city, type, color, pp2.x + Math.cos(pp2.ang) * side, pp2.z - Math.sin(pp2.ang) * side, pp2.ang, 'parked');
+      G.scene.add(pk.mesh); G.vehicles.push(pk);
+    }
+    G.peds.spawn(start.x + Math.cos(start.ang) * 9, start.z - Math.sin(start.ang) * 9);
+    G.peds.spawn(start.x - Math.sin(start.ang) * 14 - Math.cos(start.ang) * 9, start.z - Math.cos(start.ang) * 14 + Math.sin(start.ang) * 9);
     const TF = roadFollower(city, 'Calzada del Este', 0.61);
     const heli = stuntHeli(G, start.x + 20, city.height(start.x, start.z) + 36, start.z + 14);
     heli.spot.target.position.set(-6, -36, -4);
     G.police.state.heli = { mesh: heli.grp };
     G.police.state.heliActive = true;
     G.police.setWanted(4);
-    G.hud.setMission(6, 'Night Run to Isla Chica', 'Run the luggage to the Refugio de la Isla');
+    G.hud.setMission(6, 'Night Run to Isla Chica', 'Run the luggage to the Refugio de la Isla',
+      { stage: 1, total: 1, next: 'Lose the tail before the Refugio gates' });
     const FEED = [
       'HALCÓN-9: spotlight on the suspect, Calzada del Este.',
       'Dispatch: roadblock up ahead of the suspect, Bahía Este.',
@@ -297,6 +430,7 @@ export function stageShot(G, name) {
       const sx0 = Math.cos(hero.angle), sz0 = -Math.sin(hero.angle);
       driveAlong(G, copA, dt, hp0.x - fx0 * 7 + sx0 * 4.2, hp0.z - fz0 * 7 + sz0 * 4.2, 35);
       driveAlong(G, copB, dt, hp0.x - fx0 * 2.5 - sx0 * 4.2, hp0.z - fz0 * 2.5 - sz0 * 4.2, 34.6);
+      driveAlong(G, copC, dt, hp0.x - fx0 * 12 - sx0 * 0.5, hp0.z - fz0 * 12 - sz0 * 0.5, 34.8);
       G.player.pos.x = hero.mesh.position.x; G.player.pos.z = hero.mesh.position.z;
       heli.grp.position.set(hero.mesh.position.x + 17, hero.mesh.position.y + 35, hero.mesh.position.z + 12);
       heli.grp.lookAt(hero.mesh.position.x, heli.grp.position.y - 8, hero.mesh.position.z);
@@ -311,8 +445,12 @@ export function stageShot(G, name) {
     const base = roadPointAt(city, 'Muelle Uno', 0.45); // the open pier: sky, water, dock lamps
     const px = base.x, pz = base.z;
     G.player.pos.x = px; G.player.pos.z = pz;
-    G.player.health = 100000;
-    if (!G.player.weapons.includes('smg')) G.player.weapons.push('smg');
+    // Shot mode cannot hurt the player (hurt() only acts in live play), so the staged
+    // vitals simply hold: a fight already in progress — health 76, vest half-shredded.
+    stageProgression(G, {
+      cash: 3200, respect: 84, health: 76, armour: 38, station: 2,
+      cds: [12, 0, 26], standing: { 'Centro Neón': 41 },
+    });
     G.player.weapon = 'smg';
     const aimAng = base.ang; // fire along the street so the road reads in frame
     G.player.angle = aimAng;
@@ -325,18 +463,30 @@ export function stageShot(G, name) {
     G.scene.add(sedan.mesh); G.vehicles.push(sedan);
     G.combat.spawnGuard(px + fx * 16 + fz * 5, pz + fz * 16 - fx * 5);
     G.combat.spawnGuard(px + fx * 10 - fz * 7, pz + fz * 10 + fx * 7);
-    // The law answers the gunfire: an interceptor rolls in down the pier toward the fight.
-    const law = createVehicle(city, 'interceptor', 0x1c1f24, px + fx * 34 + fz * 9, pz + fz * 34 - fx * 9, aimAng + Math.PI, 'parked');
+    // The law answers the gunfire: two interceptors roll in down the pier toward the
+    // fight — the near one in frame, the second still listed live in the response panel.
+    const law = createVehicle(city, 'interceptor', 0x1c1f24, px + fx * 28 + fz * 9, pz + fz * 28 - fx * 9, aimAng + Math.PI, 'parked');
     law.speed = 11;
     law.role = 'police';
     law.unit = 'BRISA-4';
     G.scene.add(law.mesh); G.vehicles.push(law);
     G.police.state.cars.push(law); // minimap blip (display-only in shot mode)
+    const law2 = createVehicle(city, 'interceptor', 0x1c1f24, px + fx * 62 - fz * 7, pz + fz * 62 + fx * 7, aimAng + Math.PI, 'parked');
+    law2.speed = 13;
+    law2.role = 'police';
+    law2.unit = 'MUELLE-3';
+    G.scene.add(law2.mesh); G.vehicles.push(law2);
+    G.police.state.cars.push(law2);
+    // A parked hatch crowds the pier edge — one more shape in the combat frame.
+    const pierPark = createVehicle(city, 'hatch', 0xdadada, px - fx * 4 + fz * 8, pz - fz * 4 - fx * 8, aimAng + 0.4, 'parked');
+    G.scene.add(pierPark.mesh); G.vehicles.push(pierPark);
     // Bystanders caught behind the fight — they bolt when the taxi goes up.
     const fleerA = G.peds.spawn(px + fx * 21 + fz * 4, pz + fz * 21 - fx * 4);
     const fleerB = G.peds.spawn(px + fx * 24 - fz * 6, pz + fz * 24 + fx * 6);
+    G.peds.spawn(px + fx * 8 + fz * 9, pz + fz * 8 - fx * 9);
     G.police.setWanted(3);
-    G.hud.setMission(4, 'Dockside Noise', 'Clear the dock crew — 2 left');
+    G.hud.setMission(4, 'Dockside Noise', 'Clear the dock crew — 2 left',
+      { stage: 2, total: 3, next: 'Lose the heat — reach the Casa Segura' });
     const FEED = [
       'BRISA-4: shots fired, Centro Neón. Moving in.',
       'Dispatch: suspect is armed — SMG, repeat, SMG.',
@@ -346,9 +496,11 @@ export function stageShot(G, name) {
       // Sustained SMG fire keeps reporting heat — pin the frame at the staged 3 stars.
       if (G.police.stars > 3) G.police.setWanted(3);
       driveAlong(G, law, dt, px + fx * 7 + fz * 3, pz + fz * 7 - fx * 3, 12);
+      driveAlong(G, law2, dt, px + fx * 20 - fz * 5, pz + fz * 20 + fx * 5, 13.5);
       if (!S.boomed && S.t > 0.5) {
         S.boomed = true;
         damageVehicle(G, taxi, 500, 'shot');
+        damageVehicle(G, sedan, 72, 'shot'); // the sedan catches fire too — smoke, not a second blast
         G.peds.flee(fleerA, px, pz);
         G.peds.flee(fleerB, px, pz);
       }

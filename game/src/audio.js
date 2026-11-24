@@ -4,9 +4,9 @@
 import { clamp, dist2d } from './rng.js';
 
 const STATIONS = [
-  { name: 'ONDA FARO 98.1', bpm: 102, bass: [45, 0, 45, 0, 41, 0, 41, 0, 43, 0, 43, 0, 38, 0, 40, 0], arp: [69, 72, 76, 72, 65, 69, 72, 69, 67, 71, 74, 71, 62, 65, 69, 65], wave: 'sawtooth' },
-  { name: 'RADIO BRISA 103.7', bpm: 116, bass: [41, 41, 0, 41, 0, 41, 48, 0, 43, 43, 0, 43, 0, 46, 45, 0], arp: [65, 0, 69, 0, 72, 0, 69, 0, 67, 0, 71, 0, 74, 0, 71, 0], wave: 'triangle' },
-  { name: 'NEÓN FM 88.9', bpm: 88, bass: [38, 0, 0, 38, 0, 38, 0, 0, 41, 0, 0, 41, 0, 0, 36, 0], arp: [62, 0, 0, 65, 0, 0, 69, 0, 65, 0, 0, 62, 0, 0, 58, 0], wave: 'square' },
+  { name: 'ONDA FARO 98.1', track: 'Marea de Neón — Los Faros', bpm: 102, bass: [45, 0, 45, 0, 41, 0, 41, 0, 43, 0, 43, 0, 38, 0, 40, 0], arp: [69, 72, 76, 72, 65, 69, 72, 69, 67, 71, 74, 71, 62, 65, 69, 65], wave: 'sawtooth' },
+  { name: 'RADIO BRISA 103.7', track: 'Guava Sunrise — Tía Canela', bpm: 116, bass: [41, 41, 0, 41, 0, 41, 48, 0, 43, 43, 0, 43, 0, 46, 45, 0], arp: [65, 0, 69, 0, 72, 0, 69, 0, 67, 0, 71, 0, 74, 0, 71, 0], wave: 'triangle' },
+  { name: 'NEÓN FM 88.9', track: 'Medianoche Eléctrica — Vela Roja', bpm: 88, bass: [38, 0, 0, 38, 0, 38, 0, 0, 41, 0, 0, 41, 0, 0, 36, 0], arp: [62, 0, 0, 65, 0, 0, 69, 0, 65, 0, 0, 62, 0, 0, 58, 0], wave: 'square' },
 ];
 const midi = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
@@ -124,6 +124,11 @@ export function createAudio(G) {
     radioStep = 0;
     radioNext = 0;
   }
+  function setStation(i) { // 0 = off, 1..3 = stations (used by the screenshot staging)
+    station = ((i % 4) + 4) % 4;
+    radioStep = 0;
+    radioNext = 0;
+  }
   function update(dt) {
     if (!ctx) return;
     // siren follows the nearest police unit
@@ -150,8 +155,9 @@ export function createAudio(G) {
     }
   }
   return {
-    unlock, update, cycleStation, startEngine, stopEngine, engineUpdate,
+    unlock, update, cycleStation, setStation, startEngine, stopEngine, engineUpdate,
     get stationName() { return station === 0 ? null : STATIONS[station - 1].name; },
+    get currentStation() { return station === 0 ? null : STATIONS[station - 1]; },
     shot(kind) {
       if (!ctx) return;
       if (kind === 'smg') { noise(0.07, { type: 'highpass', from: 900, gain: 0.22 }); tone(210, 0.06, { type: 'triangle', gain: 0.16, slide: 60 }); }

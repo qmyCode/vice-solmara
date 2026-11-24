@@ -36,6 +36,7 @@ export function createPolice(G, rng) {
     if (!loud && !witnessed(x, z)) return;
     if (kind === 'carjack' && !witnessed(x, z, 40)) { state.heat += CRIME_HEAT.carjackQuiet; }
     else state.heat += base * severity;
+    if (G.crew) G.crew.onCrime(x, z); // the district remembers what it saw
     state.heat = clamp(state.heat, 0, 420);
     const before = state.stars;
     recalcStars();
@@ -55,6 +56,13 @@ export function createPolice(G, rng) {
   }
   function setWanted(n) {
     state.heat = n <= 0 ? 0 : HEAT_FOR_STAR[n] + 1;
+    recalcStars();
+  }
+  // The crew's plate swap: heat falls to just under the current star's threshold,
+  // which costs the suspect exactly one star (or clears a lone star entirely).
+  function dropStar() {
+    if (state.stars <= 0) return;
+    state.heat = Math.max(0, HEAT_FOR_STAR[state.stars] - 1);
     recalcStars();
   }
   function losBlocked(ax, az, bx, bz) {
@@ -322,10 +330,17 @@ export function createPolice(G, rng) {
   }
 
   return {
-    update, reportCrime, setWanted,
+    update, reportCrime, setWanted, dropStar,
     get stars() { return state.stars; },
     get heat() { return state.heat; },
     get heliActive() { return state.heliActive; },
+    // The spotlight has the suspect when the heli is up, near, and has line of sight.
+    get heliLocked() {
+      if (!state.heliActive || !state.heli) return false;
+      const pp = G.playerPos();
+      const h = state.heli.mesh.position;
+      return dist2d(pp.x, pp.z, h.x, h.z) < 46 && !losBlocked(pp.x, pp.z, h.x, h.z);
+    },
     get copCount() { return state.cars.filter((c) => !c.exploded).length + state.foot.length; },
     state,
   };
