@@ -84,11 +84,13 @@
   .wslot .hint { display: block; font-size: 8.5px; color: #ffd94a; margin-top: 1px; letter-spacing: 0.4px; }
   .wslot.sel { border-color: #ffc93c; color: #ffc93c; box-shadow: 0 0 10px rgba(255,201,60,0.35); }
   .wslot.locked { opacity: 0.45; }
-  #bustwrap { position: absolute; left: 50%; bottom: 148px; transform: translateX(-50%); width: 300px; text-align: center; }
+  #bustwrap { position: absolute; left: 50%; bottom: 186px; /* V4: lifted clear of the dialogue box */ transform: translateX(-50%); width: 300px; text-align: center; }
   #bustlabel { font-weight: 900; letter-spacing: 3px; color: #ff5348; font-size: 15px; text-shadow: 0 2px 6px #000; }
   #bustbar { height: 10px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.4); border-radius: 4px; margin-top: 4px; }
   #bustfill { height: 100%; width: 0%; background: #ff5348; border-radius: 4px; }
-  #dialogue { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); width: min(680px, 92vw); display: flex; gap: 12px; background: rgba(8,9,18,0.88); border: 1px solid rgba(255,201,60,0.5); border-radius: 8px; padding: 12px 14px; pointer-events: none; }
+  /* V4: sits between the minimap column and the weapon rack (right edge ~840 px at 1280 wide)
+     so it no longer covers the FISTS / PISTOL slots. */
+  #dialogue { position: absolute; left: 228px; bottom: 26px; box-sizing: border-box; width: min(612px, max(360px, calc(100vw - 480px))); display: flex; gap: 12px; background: rgba(8,9,18,0.88); border: 1px solid rgba(255,201,60,0.5); border-radius: 8px; padding: 12px 14px; pointer-events: none; }
   #portrait { width: 96px; height: 96px; border-radius: 6px; flex: none; }
   #d-name { color: #ffc93c; font-weight: 900; font-size: 14px; letter-spacing: 1px; }
   #d-text { font-size: 15.5px; line-height: 1.45; color: #f2eee4; margin-top: 3px; }
