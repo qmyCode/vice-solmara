@@ -15,30 +15,75 @@
   #m-ch { font-size: 10.5px; letter-spacing: 2px; color: #ffc93c; font-weight: bold; }
   #m-title { font-size: 17.5px; font-weight: 900; letter-spacing: 0.5px; }
   #m-obj { font-size: 13.5px; color: #f0ebdf; margin-top: 2px; }
+  #m-stage { display: flex; gap: 4px; margin-top: 7px; }
+  #m-stage .seg { height: 6px; flex: 1; background: rgba(255,255,255,0.18); border-radius: 3px; }
+  #m-stage .seg.done { background: #ffc93c; }
+  #m-stage .seg.now { background: #ff8c1a; box-shadow: 0 0 7px rgba(255,140,26,0.8); }
+  #m-next { font-size: 11.5px; color: #9fd4ff; margin-top: 5px; }
+  #m-next b { color: #cfe4ff; letter-spacing: 1px; }
   #m-timer { font-size: 15px; font-weight: 900; color: #ffd94a; margin-top: 2px; }
   #m-timer.low { color: #ff5348; }
+  #crew { position: absolute; top: 196px; left: 14px; width: 248px; background: rgba(8,10,20,0.62); border-left: 4px solid #2ec4b6; padding: 7px 10px; border-radius: 4px; }
+  #crew .c-title { font-size: 9.5px; letter-spacing: 2px; color: #7fe8dc; font-weight: bold; margin-bottom: 4px; }
+  .crow { display: flex; align-items: center; gap: 7px; margin-top: 4px; }
+  .cchip { width: 24px; height: 24px; flex: none; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px; color: #0b0e18; }
+  .cinfo { flex: 1; min-width: 0; overflow: hidden; }
+  .cname { font-size: 11.5px; font-weight: bold; color: #f0ebdf; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cname span { color: #9fd4ff; font-weight: normal; font-size: 10px; letter-spacing: 0.5px; }
+  .ccdbar { height: 4px; background: rgba(255,255,255,0.16); border-radius: 2px; margin-top: 2px; overflow: hidden; }
+  .ccdbar i { display: block; height: 100%; background: #2ec4b6; }
+  .ccd { font-size: 10.5px; color: #ffd94a; font-weight: bold; min-width: 34px; text-align: right; }
+  .ccd.ready { color: #7ddb6a; }
+  .ckey { font-size: 9.5px; color: #0b0e18; background: #d9d4c8; border-radius: 3px; padding: 1px 4px; font-weight: 900; }
   #stats { position: absolute; top: 14px; right: 16px; text-align: right; }
   #cash { font-size: 24px; font-weight: 900; color: #7ddb6a; text-shadow: 0 2px 6px rgba(0,0,0,0.7); }
   #respect { font-size: 12px; color: #d9c8ff; letter-spacing: 1px; }
+  #rank { margin-top: 4px; }
+  #rank-title { font-size: 12.5px; font-weight: 900; color: #ffd94a; letter-spacing: 1px; }
+  #rankbar { width: 168px; height: 6px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.3); border-radius: 3px; margin: 3px 0 0 auto; overflow: hidden; }
+  #rankfill { height: 100%; width: 0%; background: linear-gradient(90deg, #ff8c1a, #ffd94a); }
+  #rank-next { font-size: 10px; color: #cbb8ff; letter-spacing: 0.5px; margin-top: 2px; }
   #stars { font-size: 28px; letter-spacing: 3px; margin-top: 2px; }
   #stars .on { color: #ffd94a; text-shadow: 0 0 8px rgba(255,200,40,0.8); }
   #stars .off { color: rgba(255,255,255,0.22); }
-  #response { position: absolute; right: 16px; top: 158px; width: 226px; background: rgba(8,12,24,0.62); border-right: 3px solid #3f8cff; padding: 7px 10px; border-radius: 4px; text-align: right; }
+  #response { position: absolute; right: 16px; top: 216px; width: 232px; background: rgba(8,12,24,0.62); border-right: 3px solid #3f8cff; padding: 7px 10px; border-radius: 4px; text-align: right; }
   #response .r-title { font-size: 10px; letter-spacing: 2px; color: #9fd4ff; font-weight: bold; margin-bottom: 3px; }
   #r-rows { font-size: 11.5px; color: #d7e9ff; line-height: 1.55; }
-  #healthwrap { width: 170px; height: 9px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.35); margin: 6px 0 0 auto; border-radius: 3px; }
-  #health { height: 100%; width: 100%; background: linear-gradient(90deg, #e83e3e, #f2b21b); border-radius: 3px; }
+  #r-rows .more { color: #ffd94a; font-size: 10.5px; }
+  #vitals { position: absolute; left: 14px; bottom: 214px; width: 216px; background: rgba(8,10,20,0.55); padding: 7px 9px; border-radius: 4px; }
+  #d-name-line { font-size: 12px; font-weight: 900; letter-spacing: 1px; color: #ffe9b0; }
+  #d-stand { font-size: 10.5px; color: #d9d4c8; margin-top: 1px; }
+  #d-stand b { color: #7ddb6a; }
+  #d-bar { height: 5px; background: rgba(255,255,255,0.16); border-radius: 2px; margin-top: 3px; overflow: hidden; }
+  #d-fill { height: 100%; background: linear-gradient(90deg, #ff5348, #ffd94a, #7ddb6a); }
+  .vrow { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 10px; letter-spacing: 1px; color: #d9d4c8; }
+  .vrow .vlab { width: 46px; font-weight: bold; }
+  .vbar { flex: 1; height: 8px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.3); border-radius: 3px; overflow: hidden; }
+  .vbar i { display: block; height: 100%; }
+  #health { background: linear-gradient(90deg, #e83e3e, #f2b21b); }
+  #armour { background: linear-gradient(90deg, #3f8cff, #7ddbff); }
+  .vnum { width: 26px; text-align: right; font-weight: 900; font-size: 12px; color: #fff; }
   #minimap { position: absolute; left: 14px; bottom: 14px; width: 192px; height: 192px; }
-  #dispatch { position: absolute; left: 14px; bottom: 218px; width: 340px; font-size: 12.5px; }
+  #dispatch { position: absolute; left: 14px; bottom: 330px; width: 340px; font-size: 12.5px; }
+  #radio { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(8,10,20,0.6); border: 1px solid rgba(255,47,214,0.45); color: #ffb8ec; font-size: 12.5px; font-weight: bold; letter-spacing: 1px; padding: 5px 14px; border-radius: 12px; white-space: nowrap; }
+  #insight { position: absolute; top: 52px; left: 50%; transform: translateX(-50%); background: rgba(120,10,10,0.78); border: 1px solid #ff5348; color: #fff; font-size: 14px; font-weight: 900; letter-spacing: 2px; padding: 5px 16px; border-radius: 4px; white-space: nowrap; box-shadow: 0 0 16px rgba(255,60,40,0.55); }
+  #vehcard { margin-bottom: 4px; }
+  #veh-name { font-size: 13px; font-weight: 900; color: #7df9ff; letter-spacing: 1px; text-shadow: 0 2px 6px rgba(0,0,0,0.8); }
+  #veh-cond { font-size: 10.5px; color: #d9d4c8; letter-spacing: 1px; margin-top: 2px; }
+  #veh-cond b { color: #fff; }
+  #veh-bar { width: 150px; height: 6px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.3); border-radius: 3px; margin: 3px 0 0 auto; overflow: hidden; }
+  #veh-fill { height: 100%; background: linear-gradient(90deg, #ff5348, #ffd94a, #7ddb6a); }
   #dispatch div { background: rgba(10,16,30,0.62); border-left: 3px solid #3f8cff; color: #cfe4ff; padding: 4px 8px; margin-top: 4px; border-radius: 3px; }
   #speedo { position: absolute; right: 18px; bottom: 86px; text-align: right; }
   #speedo b { font-size: 34px; font-weight: 900; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
   #speedo small { font-size: 12px; color: #ddd; }
   #wslots { position: absolute; right: 16px; bottom: 16px; display: flex; gap: 6px; }
-  .wslot { width: 74px; padding: 6px 0 5px; text-align: center; background: rgba(8,10,20,0.55); border: 1px solid rgba(255,255,255,0.25); border-radius: 4px; font-size: 11px; color: #bbb; }
-  .wslot b { display: block; font-size: 12.5px; color: #eee; }
+  .wslot { width: 76px; padding: 6px 0 5px; text-align: center; background: rgba(8,10,20,0.55); border: 1px solid rgba(255,255,255,0.25); border-radius: 4px; font-size: 10.5px; color: #bbb; }
+  .wslot b { display: block; font-size: 12px; color: #eee; }
+  .wslot .ammo { display: block; font-size: 10px; color: #9fd4ff; margin-top: 1px; }
+  .wslot .hint { display: block; font-size: 8.5px; color: #ffd94a; margin-top: 1px; letter-spacing: 0.4px; }
   .wslot.sel { border-color: #ffc93c; color: #ffc93c; box-shadow: 0 0 10px rgba(255,201,60,0.35); }
-  .wslot.locked { opacity: 0.38; }
+  .wslot.locked { opacity: 0.45; }
   #bustwrap { position: absolute; left: 50%; bottom: 148px; transform: translateX(-50%); width: 300px; text-align: center; }
   #bustlabel { font-weight: 900; letter-spacing: 3px; color: #ff5348; font-size: 15px; text-shadow: 0 2px 6px #000; }
   #bustbar { height: 10px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.4); border-radius: 4px; margin-top: 4px; }
@@ -86,18 +131,28 @@
 <body>
 <canvas id="game" aria-label="Solmara Nights: a 3D open-world crime game set on the island of Solmara"></canvas>
 <div id="hud" class="hidden">
-  <div id="mission"><div id="m-ch"></div><div id="m-title"></div><div id="m-obj"></div><div id="m-timer" class="hidden"></div></div>
+  <div id="mission"><div id="m-ch"></div><div id="m-title"></div><div id="m-obj"></div><div id="m-stage"></div><div id="m-next"></div><div id="m-timer" class="hidden"></div></div>
+  <div id="crew"><div class="c-title">CREW</div><div id="crew-rows"></div></div>
+  <div id="radio" class="hidden"></div>
+  <div id="insight" class="hidden">IN SIGHT — HALCÓN-9 HAS YOU IN THE LIGHT</div>
   <div id="stats">
     <div id="cash">$0</div>
     <div id="respect">RESPECT 0</div>
+    <div id="rank"><div id="rank-title"></div><div id="rankbar"><div id="rankfill"></div></div><div id="rank-next"></div></div>
     <div id="stars"></div>
-    <div id="healthwrap"><div id="health"></div></div>
   </div>
   <div id="response" style="display:none"><div class="r-title">POLICE RESPONSE</div><div id="r-rows"></div></div>
+  <div id="vitals">
+    <div id="d-name-line">—</div>
+    <div id="d-stand"></div>
+    <div id="d-bar"><div id="d-fill"></div></div>
+    <div class="vrow"><span class="vlab">HEALTH</span><div class="vbar"><i id="health"></i></div><span class="vnum" id="health-num">100</span></div>
+    <div class="vrow"><span class="vlab">ARMOUR</span><div class="vbar"><i id="armour"></i></div><span class="vnum" id="armour-num">0</span></div>
+  </div>
   <canvas id="minimap" width="192" height="192"></canvas>
   <div id="dispatch"></div>
   <div id="bustwrap" class="hidden"><div id="bustlabel">BUSTED</div><div id="bustbar"><div id="bustfill"></div></div></div>
-  <div id="speedo" class="hidden"><b id="speed">0</b> <small>km/h</small></div>
+  <div id="speedo" class="hidden"><div id="vehcard"><div id="veh-name"></div><div id="veh-cond"></div><div id="veh-bar"><div id="veh-fill"></div></div></div><b id="speed">0</b> <small>km/h</small></div>
   <div id="wslots"></div>
   <div id="crosshair"></div>
   <div id="dialogue" class="hidden"><canvas id="portrait" width="96" height="96"></canvas><div><div id="d-name"></div><div id="d-text"></div><div id="d-next">E / CLICK ▸</div></div></div>
@@ -119,8 +174,8 @@
   <div class="tagline">ONE ISLAND · EIGHT JOBS · NOWHERE TO HIDE</div>
   <div class="controls">
     <b>WASD</b> move / drive &nbsp;·&nbsp; <b>Shift</b> run &nbsp;·&nbsp; <b>F / E</b> enter car · talk · take job<br>
-    <b>Mouse</b> look &nbsp;·&nbsp; <b>Click</b> shoot &nbsp;·&nbsp; <b>1/2/3</b> weapons &nbsp;·&nbsp; <b>Space</b> brake<br>
-    <b>M</b> map &nbsp;·&nbsp; <b>R</b> radio &nbsp;·&nbsp; <b>P / Esc</b> pause
+    <b>Mouse</b> look &nbsp;·&nbsp; <b>Click</b> shoot &nbsp;·&nbsp; <b>1–5</b> weapons &nbsp;·&nbsp; <b>Space</b> brake<br>
+    <b>Z / X / C</b> crew: swap plates · quick fix · eyes out &nbsp;·&nbsp; <b>M</b> map &nbsp;·&nbsp; <b>R</b> radio &nbsp;·&nbsp; <b>P / Esc</b> pause
   </div>
   <div class="prompt">CLICK OR PRESS ENTER TO START</div>
 </div>
