@@ -45,6 +45,31 @@ function roadTarget(city, roadName, t, ahead) {
   const i = Math.min(road.pts.length - 1, Math.floor(t * (road.pts.length - 1)) + ahead);
   return road.pts[Math.max(0, i)];
 }
+// Street dressing for the scenes (V4): a market stall on a sidewalk — a wood counter, a
+// striped canopy on two posts, and a few crates of goods. Built from plain boxes, placed
+// with its long axis along the road (ang is the road heading).
+function dressStall(G, city, x, z, ang, canopyHex) {
+  const grp = new THREE.Group();
+  const wood = new THREE.MeshLambertMaterial({ color: 0x8a6a48 });
+  const counter = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.9, 1.1), wood);
+  counter.position.y = 0.45; grp.add(counter);
+  for (const sx of [-1.15, 1.15]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.3, 0.12), wood);
+    post.position.set(sx, 1.15, 0.45); grp.add(post);
+  }
+  const canopy = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.12, 1.9), new THREE.MeshLambertMaterial({ color: canopyHex }));
+  canopy.position.set(0, 2.35, 0.35); grp.add(canopy);
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.13, 0.5), new THREE.MeshLambertMaterial({ color: 0xf6f1e6 }));
+  stripe.position.set(0, 2.36, 0.85); grp.add(stripe);
+  [[0xf2b21b, -0.6, 0.95], [0xd8542e, 0.4, 0.95], [0x5ba24a, 0.2, 0.3]].forEach(([c, gx, gz]) => {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.42, 0.5), new THREE.MeshLambertMaterial({ color: c }));
+    box.position.set(gx, 1.11, gz * 0.5); grp.add(box);
+  });
+  grp.position.set(x, city.height(x, z) + 0.05, z);
+  grp.rotation.y = ang - Math.PI / 2; // local +X runs along the road heading
+  G.scene.add(grp);
+  return grp;
+}
 function roadPointAt(city, roadName, t) {
   const road = city.roads.find((r) => r.name === roadName);
   const i = Math.min(road.pts.length - 1, Math.floor(t * (road.pts.length - 1)));
@@ -192,11 +217,38 @@ export function stageShot(G, name) {
     // Parked cars lining both kerbs of the boulevard stretch in frame — a working
     // street, not an emptied set (V3 density pass). Offset ±10.6: fully off the
     // carriageway, so the formation's corner-cutting steering never snags on them.
+    // V4: the camera looks BACK along the boulevard, and by the shutter (1.7 s at 28.5 m/s)
+    // the hero has covered ~46 m. So street life is placed in SHUTTER-relative terms:
+    // d = metres behind the hero at the shutter, mapped to start-relative along = SHUT - d.
+    const SHUT = 46;
+    // Metres back along the boulevard from index t0: the moving convoy starts behind the
+    // formation at its own pace, so it stays 30–50 m back at the shutter.
+    const roadBack = (t0, meters) => {
+      const pts = city.roads.find((r) => r.name === 'Bulevar Costero').pts;
+      let i = Math.round(t0 * (pts.length - 1)), acc = 0;
+      while (i > 0 && acc < meters) { acc += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z); i--; }
+      const p = pts[i], q = pts[Math.min(pts.length - 1, i + 1)];
+      return { x: p.x, z: p.z, ang: Math.atan2(q.x - p.x, q.z - p.z), t: i / (pts.length - 1) };
+    };
+    const atShut = (d, side) => ({ x: start.x + sf.x * (SHUT - d) + ss.x * side, z: start.z + sf.z * (SHUT - d) + ss.z * side });
     for (const [along, side, type, color] of [[7, 10.6, 'sedan', 0x3e6fb0], [-13, -10.6, 'hatch', 0x5ba24a], [-24, 10.6, 'pickup', 0x8c4a2e], [-33, -10.6, 'sedan', 0xc0c4c9]]) {
       const pk = createVehicle(city, type, color,
         start.x + sf.x * along + ss.x * side, start.z + sf.z * along + ss.z * side,
         side > 0 ? heroAng : heroAng + Math.PI, 'parked');
       G.scene.add(pk.mesh); G.vehicles.push(pk);
+    }
+    // V4 kerb cars in the frame: four more parked cars on both kerbs, 10–37 m behind the
+    // hero at the shutter, alternating sides, nose-to-tail with the street's own traffic.
+    for (const [d, side, type, color] of [[8, -10.6, 'taxi', 0xf2b21b], [18, -10.6, 'sedan', 0xd8d3c8], [28, -10.6, 'pickup', 0x3f6f8a], [38, -10.6, 'hatch', 0xc2452d], [48, -10.6, 'sedan', 0x2c7a4d], [58, -10.6, 'taxi', 0xf2b21b], [66, -10.6, 'pickup', 0xe0e0e0]]) {
+      const p = atShut(d, side);
+      const pk = createVehicle(city, type, color, p.x, p.z, side > 0 ? heroAng : heroAng + Math.PI, 'parked');
+      G.scene.add(pk.mesh); G.vehicles.push(pk);
+    }
+    // Market stalls on the sidewalks, the storefront dressing the frame's kerbs were
+    // missing: a stall per block, awnings in three colours.
+    for (const [d, side, col] of [[12, -8.6, 0xd8542e], [22, -8.6, 0x2e8b9a], [34, -8.6, 0xf2b21b], [46, -8.6, 0x5ba24a], [60, -8.6, 0xd8542e]]) {
+      const p = atShut(d, side);
+      dressStall(G, city, p.x, p.z, heroAng, col);
     }
     // Ambient traffic sharing the boulevard: two cars trailing the pack down the same
     // road (the camera looks back along the road, so the queue behind the law is what
@@ -210,10 +262,22 @@ export function stageShot(G, name) {
     G.scene.add(behind.mesh, behind2.mesh); G.vehicles.push(behind, behind2);
     const BF = roadFollower(city, 'Bulevar Costero', 0.766);
     const BF2 = roadFollower(city, 'Bulevar Costero', 0.7745);
+    // V4 convoy: three more civilian cars in the travel lane 30, 40 and 50 m behind the
+    // start, moving with the formation so they stay in the frame's mid-distance.
+    const convoy = [[30, 'sedan', 0x2c7a4d], [40, 'pickup', 0xe0e0e0], [50, 'hatch', 0xb83a3a], [62, 'taxi', 0xf2b21b], [74, 'sedan', 0xd8d3c8]].map(([m, type, color]) => {
+      const cp = roadBack(0.79, m);
+      const car = createVehicle(city, type, color, cp.x, cp.z, cp.ang, 'parked');
+      car.speed = 28;
+      G.scene.add(car.mesh); G.vehicles.push(car);
+      return { car, F: roadFollower(city, 'Bulevar Costero', cp.t) };
+    });
     // Pedestrians on the sidewalks BEHIND the hero — the stretch of street the camera
     // actually sees — so the boulevard reads lived-in, not emptied for the shot.
-    for (const [along, side] of [[-6, 8.6], [-9, -8.2], [-11, 8.2], [-15, -8.6], [-17, 8.8], [-20, -8.3], [-23, -8.5], [-26, 8.5], [-28, 8.4], [-31, -8.7], [-34, -8.8], [5, -8.4]]) {
-      G.peds.spawn(start.x + sf.x * along + ss.x * side, start.z + sf.z * along + ss.z * side);
+    // V4: placed at shutter-relative distances (see atShut above) so they stand in the frame
+    // on both pavements, plus two on the stall line.
+    for (const [d, side] of [[2, -8.4], [6, -8.8], [10, -8.6], [15, -8.3], [20, -8.9], [26, -8.5], [31, -8.6], [37, -8.4], [42, -8.7], [24, -9.2], [50, -8.5], [56, -8.8], [63, -8.4]]) {
+      const p = atShut(d, side);
+      G.peds.spawn(p.x, p.z);
     }
     // The van sits spun-out on the landward lane ahead of the start point. Placement
     // was solved from a measured projection, not by eye: at +34 f / +7.5 s the wreck
@@ -252,6 +316,7 @@ export function stageShot(G, name) {
       driveAlong(G, hero, dt, ht.x, ht.z, 28.5);
       followRoad(G, behind, BF, 1, 27.9, dt);
       followRoad(G, behind2, BF2, 1, 28, dt);
+      for (const c of convoy) followRoad(G, c.car, c.F, 1, 27.9, dt);
       // The staged dent is the floor: blast and bumper noise may not write the hero
       // down past it mid-take (the same pinning the frame's 4 stars already use).
       // The wrecked flag is pinned too: one transient dip under 30 health would
@@ -306,9 +371,11 @@ export function stageShot(G, name) {
       // fireball towers over its landward shoulder, parked cars and pedestrians line
       // both kerbs, facade-rich buildings canyon the street beyond — HUD throughout.
       const hp = hero.mesh.position;
-      G.camera.position.set(hp.x + fx * 4.9 + sx * 3.6, hp.y + 1.28, hp.z + fz * 4.9 + sz * 3.6);
-      G.camera.lookAt(hp.x - fx * 1.1, hp.y + 0.88, hp.z - fz * 1.1);
-      G.camera.fov = 58; G.camera.updateProjectionMatrix();
+      // V4: a touch higher and wider than V3, so more of the convoy and the kerb queue
+      // behind the hero comes into the frame (the hero still fills the lower middle).
+      G.camera.position.set(hp.x + fx * 4.9 + sx * 3.6, hp.y + 1.7, hp.z + fz * 4.9 + sz * 3.6);
+      G.camera.lookAt(hp.x - fx * 1.1, hp.y + 1.0, hp.z - fz * 1.1);
+      G.camera.fov = 64; G.camera.updateProjectionMatrix();
     };
   } else if (name === 'dialogue') {
     // Staged on the Taller Marisol forecourt: the building's door and neon sign face along
@@ -347,6 +414,17 @@ export function stageShot(G, name) {
     G.scene.add(passer.mesh); G.vehicles.push(passer);
     G.peds.spawn(front.x + fx * 0.5 - rx * 7.5, front.z + fz * 0.5 - rz * 7.5);
     G.peds.spawn(front.x + fx * 0.5 + rx * 7.5, front.z + fz * 0.5 + rz * 7.5);
+    // V4 density: strollers on the forecourt and the lane beyond the two-shot, a parked
+    // hatch on the kerb in the foreground, and a market stall at the garage's far corner.
+    // (The camera is only ~9 m off the pair with a narrow lateral view, so the bystanders sit
+    // between the two-shot and the garage, where the frame actually reaches.)
+    for (const [a, b] of [[-2.5, -4.5], [-3.5, 6.5], [-6, -2]]) {
+      G.peds.spawn(front.x + fx * a + rx * b, front.z + fz * a + rz * b);
+    }
+    // A parked hatch on the forecourt's far corner, in the frame's left gap behind the pair.
+    const kerbHatch = createVehicle(city, 'hatch', 0x3e6fb0, front.x - fx * 1.5 - rx * 6.5, front.z - fz * 1.5 - rz * 6.5, g.ang + 0.5, 'parked');
+    G.scene.add(kerbHatch.mesh); G.vehicles.push(kerbHatch);
+    dressStall(G, city, front.x + fx * 4 + rx * 13, front.z + fz * 4 + rz * 13, g.ang, 0x5ba24a);
     S.update = (dt) => {
       driveAlong(G, passer, dt, front.x + rx * 34 - fx * 2.6, front.z + rz * 34 - fz * 2.6, 10.5);
       // Wider than the old two-shot: Rico and Marina hold the middle, the GT crowds the
@@ -397,13 +475,36 @@ export function stageShot(G, name) {
     G.scene.add(traf.mesh); G.vehicles.push(traf);
     // V3 density: parked cars on the causeway shoulders + bystanders near the start,
     // so the chase frame carries the same street life as the cover.
-    for (const [tt, side, type, color] of [[0.33, 8.6, 'hatch', 0xd8542e], [0.42, -8.6, 'sedan', 0x4a90c2]]) {
+    for (const [tt, side, type, color] of [[0.33, 8.6, 'hatch', 0xd8542e], [0.42, -8.6, 'sedan', 0x4a90c2], [0.47, 8.6, 'taxi', 0xf2b21b], [0.5, -8.6, 'pickup', 0x8c4a2e], [0.36, -8.6, 'sedan', 0xc0c4c9]]) {
       const pp2 = roadPointAt(city, 'Calzada del Este', tt);
       const pk = createVehicle(city, type, color, pp2.x + Math.cos(pp2.ang) * side, pp2.z - Math.sin(pp2.ang) * side, pp2.ang, 'parked');
       G.scene.add(pk.mesh); G.vehicles.push(pk);
     }
     G.peds.spawn(start.x + Math.cos(start.ang) * 9, start.z - Math.sin(start.ang) * 9);
     G.peds.spawn(start.x - Math.sin(start.ang) * 14 - Math.cos(start.ang) * 9, start.z - Math.cos(start.ang) * 14 + Math.sin(start.ang) * 9);
+    // V4: the camera looks FORWARD up the calzada, and the hero covers ~45 m by the shutter,
+    // so the frame reaches roughly 30–95 m past the start. Street dressing is placed by ARC
+    // LENGTH from the start (the calzada's point index is unevenly spaced, so index-based
+    // placement landed behind the hero): shoulder parking, bystanders on both shoulders and
+    // a market stall on the far kerb.
+    const calzada = city.roads.find((r) => r.name === 'Calzada del Este').pts;
+    const aheadAt = (meters) => {
+      let i = Math.round(0.22 * (calzada.length - 1)), acc = 0;
+      while (i < calzada.length - 2 && acc < meters) { acc += Math.hypot(calzada[i + 1].x - calzada[i].x, calzada[i + 1].z - calzada[i].z); i++; }
+      const p = calzada[i], q = calzada[Math.min(calzada.length - 1, i + 1)];
+      return { x: p.x, z: p.z, ang: Math.atan2(q.x - p.x, q.z - p.z) };
+    };
+    for (const [m, side, type, color] of [[40, 8.6, 'sedan', 0xc2452d], [62, -8.6, 'hatch', 0xd8d3c8], [78, 8.6, 'taxi', 0xf2b21b]]) {
+      const pp = aheadAt(m);
+      const pk = createVehicle(city, type, color, pp.x + Math.cos(pp.ang) * side, pp.z - Math.sin(pp.ang) * side, pp.ang, 'parked');
+      G.scene.add(pk.mesh); G.vehicles.push(pk);
+    }
+    for (const [m, side] of [[35, 9.2], [50, -9.2], [70, 9.2], [88, -9.2]]) {
+      const pp = aheadAt(m);
+      G.peds.spawn(pp.x + Math.cos(pp.ang) * side, pp.z - Math.sin(pp.ang) * side);
+    }
+    const stallPt = aheadAt(56);
+    dressStall(G, city, stallPt.x - Math.cos(stallPt.ang) * 9, stallPt.z + Math.sin(stallPt.ang) * 9, stallPt.ang, 0xd8542e);
     const TF = roadFollower(city, 'Calzada del Este', 0.61);
     const heli = stuntHeli(G, start.x + 20, city.height(start.x, start.z) + 36, start.z + 14);
     heli.spot.target.position.set(-6, -36, -4);
@@ -484,6 +585,13 @@ export function stageShot(G, name) {
     const fleerA = G.peds.spawn(px + fx * 21 + fz * 4, pz + fz * 21 - fx * 4);
     const fleerB = G.peds.spawn(px + fx * 24 - fz * 6, pz + fz * 24 + fx * 6);
     G.peds.spawn(px + fx * 8 + fz * 9, pz + fz * 8 - fx * 9);
+    // V4 density: market stalls along the pier edge and a few more bystanders back
+    // toward the causeway, so the pier reads as a working dock, not an empty stage.
+    dressStall(G, city, px + fx * 5 - fz * 7, pz - fz * 5 - fx * 7, aimAng, 0x8a6a48);
+    dressStall(G, city, px + fx * 2.5 + fz * 6.5, pz + fz * 2.5 - fx * 6.5, aimAng + 0.3, 0xd8542e);
+    dressStall(G, city, px + fx * 30 + fz * 9, pz + fz * 30 - fx * 9, aimAng, 0x3e6fb0);
+    G.peds.spawn(px + fx * 30 - fz * 4, pz + fz * 30 + fx * 4);
+    G.peds.spawn(px + fx * 16 + fz * 4, pz + fz * 16 - fx * 4);
     G.police.setWanted(3);
     G.hud.setMission(4, 'Dockside Noise', 'Clear the dock crew — 2 left',
       { stage: 2, total: 3, next: 'Lose the heat — reach the Casa Segura' });
